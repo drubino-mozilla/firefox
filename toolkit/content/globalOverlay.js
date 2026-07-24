@@ -7,8 +7,13 @@ function closeWindow(aClose, aPromptFunction, aSource) {
     "resource://gre/modules/AppConstants.sys.mjs"
   );
 
-  // Closing the last window doesn't quit the application on OS X.
-  if (AppConstants.platform != "macosx") {
+  // Closing the last window doesn't quit the application on OS X, nor on
+  // Windows when the user has opted into keeping it running in the background.
+  let sessionSurvivesLastWindow =
+    AppConstants.platform == "macosx" ||
+    Services.prefs.getBoolPref("browser.backgroundMode.enabled", false);
+
+  if (!sessionSurvivesLastWindow) {
     var windowCount = 0;
     for (let w of Services.wm.getEnumerator(null)) {
       if (w.closed) {

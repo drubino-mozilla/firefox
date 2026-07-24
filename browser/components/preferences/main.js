@@ -101,6 +101,7 @@ Preferences.addAll([
   { id: "browser.startup.page", type: "int" },
   { id: "browser.sessionstore.newTabOnRestore", type: "bool" },
   { id: "browser.startup.windowsLaunchOnLogin.enabled", type: "bool" },
+  { id: "browser.backgroundMode.enabled", type: "bool" },
   { id: "browser.privatebrowsing.autostart", type: "bool" },
 
   // AI Controls, these pref values can affect settings on the main pane and
@@ -168,6 +169,12 @@ Preferences.addSetting(
 Preferences.addSetting({
   id: "windowsLaunchOnLoginEnabled",
   pref: "browser.startup.windowsLaunchOnLogin.enabled",
+});
+
+Preferences.addSetting({
+  id: "backgroundMode",
+  pref: "browser.backgroundMode.enabled",
+  visible: () => AppConstants.platform === "win",
 });
 
 Preferences.addSetting(
@@ -564,6 +571,10 @@ function createStartupConfig(hidden = false) {
         controlAttrs: {
           role: "status",
         },
+      },
+      {
+        id: "backgroundMode",
+        l10nId: "startup-background-mode",
       },
       {
         id: "alwaysCheckDefault",
