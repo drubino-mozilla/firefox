@@ -80,6 +80,15 @@ class BackgroundModeSingleton {
     Services.obs.addObserver(this, "domwindowclosed");
 
     this.#syncSurvivalRef();
+
+    // A silent restart, which is how the update flow relaunches a browser that
+    // was left running with no windows, deliberately opens no window at all.
+    // None of the notifications above will ever fire in that case, so check the
+    // window count once here. Without this the user would be left with a running
+    // browser and no icon to get back into it.
+    if (Services.startup.wasSilentlyStarted) {
+      this.#scheduleUpdate();
+    }
   }
 
   observe(subject, topic) {

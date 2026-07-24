@@ -5,5 +5,6 @@ tags = "os_integration"
 ["test_no_window_update_restart.py"]
 run-if = [
   "os == 'mac'",
+  "os == 'win'",
 ]
-reason = "Test of a mac only feature"
+reason = "Only mac, and Windows in background mode, can be left running with no windows open"

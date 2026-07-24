@@ -298,6 +298,17 @@ const STAGING_POLLING_MAX_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const STAGING_POLLING_ATTEMPTS_PER_INTERVAL = 5;
 const STAGING_POLLING_MAX_DURATION_MS = 1 * 60 * 60 * 1000; // 1 hour
 
+// Set when the user has opted into letting the browser keep running on Windows
+// after its last window is closed, which is what makes an automatic restart
+// necessary there. Owned by the browser; read here only to decide whether a
+// process with no windows is an expected state.
+const PREF_BACKGROUND_MODE_ENABLED = "browser.backgroundMode.enabled";
+
+// Window type of the off-screen window that background mode keeps open to own
+// its notification area icon. It is not a window the user can use, so it must
+// not count when deciding whether the browser is idle enough to restart.
+const BACKGROUND_MODE_HOST_WINDOWTYPE = "Browser:BackgroundModeTray";
+
 // This value will be set to true if it appears that BITS is being used by
 // another user to download updates. We don't really want two users using BITS
 // at once. Computers with many users (ex: a school computer), should not end
@@ -7394,6 +7405,7 @@ class RestartOnLastWindowClosed {
       PREF_APP_UPDATE_NO_WINDOW_AUTO_RESTART_ENABLED,
       this
     );
+    Services.prefs.addObserver(PREF_BACKGROUND_MODE_ENABLED, this);
     Services.obs.addObserver(this, "quit-application");
   }
 
@@ -7405,13 +7417,27 @@ class RestartOnLastWindowClosed {
       PREF_APP_UPDATE_NO_WINDOW_AUTO_RESTART_ENABLED,
       this
     );
+    Services.prefs.removeObserver(PREF_BACKGROUND_MODE_ENABLED, this);
     Services.obs.removeObserver(this, "quit-application");
 
     this.#maybeEnableOrDisable();
   }
 
+  // Whether this platform can be left running with no windows open, which is
+  // the only situation this class exists to handle. macOS always can. Windows
+  // only can while the user has opted into background mode.
+  get #canRunWithoutWindows() {
+    if (AppConstants.platform == "macosx") {
+      return true;
+    }
+    return (
+      AppConstants.platform == "win" &&
+      Services.prefs.getBoolPref(PREF_BACKGROUND_MODE_ENABLED, false)
+    );
+  }
+
   get shouldEnable() {
-    if (AppConstants.platform != "macosx") {
+    if (!this.#canRunWithoutWindows) {
       return false;
     }
     if (this.#hasShutdown) {
@@ -7430,7 +7456,10 @@ class RestartOnLastWindowClosed {
   observe(subject, topic, data) {
     switch (topic) {
       case "nsPref:changed":
-        if (data == PREF_APP_UPDATE_NO_WINDOW_AUTO_RESTART_ENABLED) {
+        if (
+          data == PREF_APP_UPDATE_NO_WINDOW_AUTO_RESTART_ENABLED ||
+          data == PREF_BACKGROUND_MODE_ENABLED
+        ) {
           this.#maybeEnableOrDisable();
         }
         break;
@@ -7441,7 +7470,7 @@ class RestartOnLastWindowClosed {
         this.#onWindowClose();
         break;
       case "domwindowopened":
-        this.#onWindowOpen();
+        this.#onWindowOpen(subject);
         break;
       case "update-downloaded":
       case "update-staged":
@@ -7450,11 +7479,21 @@ class RestartOnLastWindowClosed {
     }
   }
 
-  // Returns true if any windows are open. Otherwise, false.
+  // Returns true if any window the user can actually use is open. Otherwise,
+  // false.
+  //
+  // The macOS hidden window is deliberately never registered as a top level
+  // window, so it does not show up here at all. Background mode's host window on
+  // Windows is a normal registered window, so it has to be skipped explicitly or
+  // the browser would look permanently occupied and never restart.
   #windowsAreOpen() {
-    // eslint-disable-next-line no-unused-vars
+    const hostWindows = new Set(
+      Services.wm.getEnumerator(BACKGROUND_MODE_HOST_WINDOWTYPE)
+    );
     for (const win of Services.wm.getEnumerator(null)) {
-      return true;
+      if (!hostWindows.has(win)) {
+        return true;
+      }
     }
     return false;
   }
@@ -7559,7 +7598,7 @@ class RestartOnLastWindowClosed {
     );
   }
 
-  #onWindowOpen() {
+  #onWindowOpen(win) {
     if (this.#restartTimer) {
       LOG(
         "RestartOnLastWindowClosed.#onWindowOpen - Window opened. Cancelling " +
@@ -7569,6 +7608,13 @@ class RestartOnLastWindowClosed {
     }
     this.#restartTimer = null;
     this.#restartTimerExpired = false;
+
+    // A window's type cannot be read until its document has been parsed, so we
+    // cannot yet tell a window the user can use apart from background mode's
+    // host window. Cancelling above is the safe choice either way, but re-check
+    // once this window has loaded, otherwise the host window opening would
+    // suppress restarts for as long as the browser stays windowless.
+    win.addEventListener("load", () => this.#onWindowClose(), { once: true });
   }
 
   #onRestartTimerExpire() {

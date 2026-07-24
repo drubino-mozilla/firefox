@@ -202,7 +202,11 @@ pref("app.update.langpack.enabled", true);
   pref("app.update.background.allowUpdatesForUnelevatedInstallations", false);
 #endif
 
-#ifdef XP_MACOSX
+// These only take effect on platforms that can sit with no browser windows
+// open: always on macOS, and on Windows only while browser.backgroundMode is
+// enabled. Without them a process left running with no windows would never
+// restart, and so would never apply a staged update.
+#if defined(XP_MACOSX) || defined(XP_WIN)
   // If set to true, Firefox will automatically restart if it is left running
   // with no browser windows open.
   pref("app.update.noWindowAutoRestart.enabled", true);
