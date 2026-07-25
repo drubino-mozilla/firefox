@@ -362,6 +362,15 @@ pref("browser.startup.windowsLaunchOnLogin.disableLaunchOnLoginPrompt", false);
 // direction.
 pref("browser.startup.windowsLaunchOnLogin.defaultEnabled", false);
 pref("browser.startup.windowsLaunchOnLogin.alreadyApplied", false);
+
+// Keep the process running after the last browser window is closed, the way
+// macOS does, so that background work such as Web Push delivery survives. The
+// user gets back in through a notification area icon.
+pref("browser.backgroundMode.enabled", false);
+// Whether the notification area icon is shown while running with no windows.
+// Turning this off leaves no way back into the browser except launching it
+// again, so it is only useful for debugging.
+pref("browser.backgroundMode.trayIcon.enabled", true);
 #endif
 
 // Show an upgrade dialog on major upgrades.

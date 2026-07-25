@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+
+<!DOCTYPE html>
+
+<html
+  xmlns="http://www.w3.org/1999/xhtml"
+  xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  id="backgroundModeTray"
+  windowtype="Browser:BackgroundModeTray"
+  data-l10n-sync="true"
+>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src chrome:" />
+    <link rel="stylesheet" href="chrome://global/skin/global.css" />
+
+    <link rel="localization" href="branding/brand.ftl" />
+    <link rel="localization" href="browser/backgroundMode.ftl" />
+    <title data-l10n-id="background-mode-tray-title"></title>
+    <script src="chrome://global/content/customElements.js" />
+    <script src="chrome://browser/content/backgroundModeTray.js" />
+  </head>
+
+  <!-- The notification area icon is taken from this menu's icon, and its
+     - tooltip from the menu's label. Because the contextmenu attribute is set,
+     - a left click fires systemstatusbarclick instead of opening the popup. -->
+  <xul:menu
+    id="background-mode-tray-menu"
+    class="menu-iconic"
+    contextmenu="background-mode-tray-popup"
+    image="chrome://branding/content/icon32.png"
+    data-l10n-id="background-mode-tray-menu"
+  >
+    <xul:menupopup id="background-mode-tray-popup">
+      <xul:menuitem
+        id="background-mode-new-window"
+        data-l10n-id="background-mode-new-window"
+      />
+      <xul:menuitem
+        id="background-mode-new-private-window"
+        data-l10n-id="background-mode-new-private-window"
+      />
+      <xul:menuseparator />
+      <xul:menuitem
+        id="background-mode-quit"
+        data-l10n-id="background-mode-quit"
+      />
+    </xul:menupopup>
+  </xul:menu>
+
+  <body />
+</html>

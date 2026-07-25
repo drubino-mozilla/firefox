@@ -44,6 +44,9 @@ with Files("test/unit/test_SitePermissions.js"):
 with Files("AboutNewTab.sys.mjs"):
     BUG_COMPONENT = ("Firefox", "New Tab Page")
 
+with Files("BackgroundMode.sys.mjs"):
+    BUG_COMPONENT = ("Firefox", "General")
+
 with Files("BrowserWindowTracker.sys.mjs"):
     BUG_COMPONENT = ("Firefox", "General")
 
@@ -113,6 +116,7 @@ XPCSHELL_TESTS_MANIFESTS += ["test/unit/xpcshell.toml"]
 
 EXTRA_JS_MODULES += [
     "AboutNewTab.sys.mjs",
+    "BackgroundMode.sys.mjs",
     "BrowserDOMWindow.sys.mjs",
     "BrowserUIUtils.sys.mjs",
     "BrowserUsageTelemetry.sys.mjs",

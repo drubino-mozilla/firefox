@@ -4062,10 +4062,13 @@ function warnAboutClosingWindow() {
   os.notifyObservers(null, "browser-lastwindow-close-granted");
 
   // OS X doesn't quit the application when the last window is closed, but keeps
-  // the session alive. Hence don't prompt users to save tabs, but warn about
-  // closing multiple tabs.
+  // the session alive, and so does background mode on Windows. Hence don't
+  // prompt users to save tabs, but warn about closing multiple tabs.
+  let keepsRunning =
+    AppConstants.platform == "macosx" ||
+    Services.prefs.getBoolPref("browser.backgroundMode.enabled", false);
   return (
-    AppConstants.platform != "macosx" ||
+    !keepsRunning ||
     isPBWindow ||
     gBrowser.warnAboutClosingTabs(
       gBrowser.openTabs.length,

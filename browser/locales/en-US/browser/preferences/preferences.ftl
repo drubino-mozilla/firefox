@@ -205,6 +205,13 @@ windows-launch-on-login-open-new-tab =
     .label = Also open a new tab
     .accesskey = n
 
+# Option to keep the application running after its last window is closed, so
+# that background work such as website notifications keeps working. An icon in
+# the Windows notification area is the way back into the browser.
+startup-background-mode =
+    .label = Keep { -brand-short-name } running in the background when you close it
+    .accesskey = K
+
 disable-extension =
     .label = Disable Extension
 

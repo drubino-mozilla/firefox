@@ -15,6 +15,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "resource:///modules/asrouter/ASRouterDefaultConfig.sys.mjs",
   ASRouterNewTabHook: "resource:///modules/asrouter/ASRouterNewTabHook.sys.mjs",
   AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
+  BackgroundMode: "resource:///modules/BackgroundMode.sys.mjs",
   BackupService: "resource:///modules/backup/BackupService.sys.mjs",
   BrowserSearchTelemetry:
     "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs",
@@ -143,6 +144,18 @@ const STARTUP_CRASHES_END_DELAY_MS = 30 * 1000;
  */
 const OBSERVE_LASTWINDOW_CLOSE_TOPICS = AppConstants.platform != "macosx";
 
+/*
+ * Whether closing the last window is really the end of the session. It is not
+ * on macOS, and it is not on Windows when the user has opted into keeping the
+ * browser running in the background, in which case treating it as a quit would
+ * both prompt about quitting and mark the session for restoring far too early.
+ */
+function lastWindowCloseEndsSession() {
+  return (
+    OBSERVE_LASTWINDOW_CLOSE_TOPICS && !lazy.BackgroundMode.keepsSessionAlive
+  );
+}
+
 export let BrowserInitState = {};
 BrowserInitState.startupIdleTaskPromise = new Promise(resolve => {
   BrowserInitState._resolveStartupIdleTask = resolve;
@@ -219,14 +232,14 @@ BrowserGlue.prototype = {
         this._onQuitApplicationGranted();
         break;
       case "browser-lastwindow-close-requested":
-        if (OBSERVE_LASTWINDOW_CLOSE_TOPICS) {
+        if (lastWindowCloseEndsSession()) {
           // The application is not actually quitting, but the last full browser
           // window is about to be closed.
           this._onQuitRequest(subject, "lastwindow");
         }
         break;
       case "browser-lastwindow-close-granted":
-        if (OBSERVE_LASTWINDOW_CLOSE_TOPICS) {
+        if (lastWindowCloseEndsSession()) {
           this._setPrefToSaveSession();
         }
         break;
@@ -386,6 +399,10 @@ BrowserGlue.prototype = {
   // (i.e. before the first window is opened)
   _beforeUIStartup: function BG__beforeUIStartup() {
     lazy.SessionStartup.init();
+
+    // Must run before the first window opens, so that the survival reference is
+    // already held by the time that window can be closed again.
+    lazy.BackgroundMode.init();
 
     // check if we're in safe mode
     if (Services.appinfo.inSafeMode) {
