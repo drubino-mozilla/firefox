@@ -24,10 +24,16 @@ XPCOMUtils.defineLazyPreferenceGetter(
 
 const TRAY_URI = "chrome://browser/content/backgroundModeTray.xhtml";
 
-// Far enough off-screen that the host window can never be seen, in case a
-// window manager declines to honour the visibility flag we set on load.
+// Positioned far enough off-screen that the host window can never be seen, in
+// case a window manager declines to honour the visibility flag we set on load.
+//
+// alert=yes is what keeps this window out of the taskbar and out of Alt-Tab: it
+// is the only route to WS_EX_TOOLWINDOW for a non-popup window, via
+// CHROME_ALERT -> InitData::mIsAlert -> nsWindow::WindowExStyle. Without it the
+// window acquires a taskbar button as soon as SystemStatusBar calls
+// SetForegroundWindow on it to open the icon's menu. It requires dialog=yes.
 const TRAY_FEATURES =
-  "chrome,dialog=yes,titlebar=no,width=1,height=1,left=-32000,top=-32000";
+  "chrome,dialog=yes,alert=yes,titlebar=no,width=1,height=1,left=-32000,top=-32000";
 
 /**
  * Brings the macOS "zero-window session" model to Windows, behind a pref.
@@ -40,16 +46,21 @@ const TRAY_FEATURES =
  *
  * macOS also has a hidden window that owns the menu bar and Dock menu, which is
  * what makes the zero-window state usable. Windows has no Dock, so instead we
- * open an off-screen host window while there are no browser windows and hang a
- * notification area icon off it. The icon is the only way back in, which is why
- * it owns both re-entry and quit.
+ * open an off-screen host window and hang a notification area icon off it. The
+ * icon is the only way back in, which is why it owns both re-entry and quit.
+ *
+ * The icon exists for exactly as long as the pref is set, rather than only while
+ * there are no windows: a background application that appears in the
+ * notification area only some of the time is not a pattern users recognise, and
+ * it would give no indication ahead of time that closing the last window is not
+ * going to quit.
  */
 class BackgroundModeSingleton {
   #initialized = false;
   #holdingSurvivalRef = false;
   #trayWindow = null;
   #shuttingDown = false;
-  #updateScheduled = false;
+  #startupComplete = false;
 
   get supported() {
     return AppConstants.platform == "win";
@@ -73,21 +84,17 @@ class BackgroundModeSingleton {
     this.#initialized = true;
 
     Services.obs.addObserver(this, "quit-application-granted");
-    // A window is only discoverable as a browser window once its chrome
-    // document has been parsed, which is well after domwindowopened, so use the
-    // per-window startup notification for opens and domwindowclosed for closes.
+    // Only used to tell when it is safe to add a window of our own; opening one
+    // during startup would compete with the first browser window.
     Services.obs.addObserver(this, "browser-delayed-startup-finished");
-    Services.obs.addObserver(this, "domwindowclosed");
 
     this.#syncSurvivalRef();
 
     // A silent restart, which is how the update flow relaunches a browser that
-    // was left running with no windows, deliberately opens no window at all.
-    // None of the notifications above will ever fire in that case, so check the
-    // window count once here. Without this the user would be left with a running
-    // browser and no icon to get back into it.
+    // was left running with no windows, deliberately opens no window at all, so
+    // the notification above will never arrive and there is nothing to wait for.
     if (Services.startup.wasSilentlyStarted) {
-      this.#scheduleUpdate();
+      this.#onStartupComplete();
     }
   }
 
@@ -96,15 +103,24 @@ class BackgroundModeSingleton {
       case "quit-application-granted":
         // Mirrors what nsAppStartup::Quit does at this point on macOS: give up
         // the baseline reference so the counter can reach zero once the last
-        // window is gone and shutdown can finish.
+        // window is gone and shutdown can finish. The host window is closed by
+        // Quit's own CloseAllWindows.
         this.#shuttingDown = true;
         this.#releaseSurvivalRef();
         break;
       case "browser-delayed-startup-finished":
-      case "domwindowclosed":
-        this.#scheduleUpdate();
+        this.#onStartupComplete();
         break;
     }
+  }
+
+  #onStartupComplete() {
+    if (this.#startupComplete) {
+      return;
+    }
+    this.#startupComplete = true;
+    Services.obs.removeObserver(this, "browser-delayed-startup-finished");
+    this.#syncTrayHost();
   }
 
   onEnabledChanged() {
@@ -114,7 +130,7 @@ class BackgroundModeSingleton {
     // Turning the pref off while running with no windows drops the last reason
     // to stay alive, so the browser quits once the host window is gone.
     this.#syncSurvivalRef();
-    this.#scheduleUpdate();
+    this.#syncTrayHost();
   }
 
   #syncSurvivalRef() {
@@ -141,45 +157,18 @@ class BackgroundModeSingleton {
     Services.startup.exitLastWindowClosingSurvivalArea();
   }
 
-  #scheduleUpdate() {
-    if (this.#updateScheduled) {
+  #syncTrayHost() {
+    if (this.#shuttingDown || !this.#startupComplete) {
       return;
     }
-    this.#updateScheduled = true;
-    // Window registration settles after the current task, so count windows
-    // once it has rather than racing the notification we are responding to.
-    Services.tm.dispatchToMainThread(() => {
-      this.#updateScheduled = false;
-      this.#update();
-    });
-  }
-
-  #update() {
-    if (!this.#initialized || this.#shuttingDown) {
-      return;
-    }
-    if (
-      this.keepsSessionAlive &&
-      lazy.trayIconEnabled &&
-      !this.#browserWindowCount()
-    ) {
-      this.#showTray();
+    if (this.keepsSessionAlive && lazy.trayIconEnabled) {
+      this.#openTrayHost();
     } else {
-      this.#hideTray();
+      this.#closeTrayHost();
     }
   }
 
-  #browserWindowCount() {
-    let count = 0;
-    for (let win of Services.wm.getEnumerator("navigator:browser")) {
-      if (!win.closed) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  #showTray() {
+  #openTrayHost() {
     if (this.#trayWindow && !this.#trayWindow.closed) {
       return;
     }
@@ -197,7 +186,7 @@ class BackgroundModeSingleton {
     );
   }
 
-  #hideTray() {
+  #closeTrayHost() {
     let win = this.#trayWindow;
     this.#trayWindow = null;
     if (win && !win.closed) {

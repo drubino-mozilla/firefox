@@ -9,9 +9,11 @@
 # to users, but required for the window to be identifiable.
 background-mode-tray-title = { -brand-short-name } background session
 
-# Tooltip of the notification area icon.
+# Tooltip of the notification area icon. The icon is present whenever the
+# feature is enabled, including while windows are open, so this cannot say
+# anything about the browser currently being in the background.
 background-mode-tray-menu =
-    .label = { -brand-short-name } is running in the background
+    .label = { -brand-short-name }
 
 background-mode-new-window =
     .label = New window
