@@ -214,9 +214,41 @@ LRESULT StatusBarEntry::OnMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     nsPresContext* pc = popupFrame->PresContext();
-    const CSSIntPoint point = gfx::RoundedToInt(
-        LayoutDeviceIntPoint(GET_X_LPARAM(wp), GET_Y_LPARAM(wp)) /
-        pc->CSSToDevPixelScale());
+    LayoutDeviceIntPoint devPoint(GET_X_LPARAM(wp), GET_Y_LPARAM(wp));
+
+    // The click lands on the icon, which lives in the taskbar and therefore
+    // outside the work area. Layout will not place a popup outside the work
+    // area: it flips the popup above the click point using the full popup
+    // height, then clamps the height to the work area, which leaves the menu
+    // truncated to a couple of items with scroll arrows. Pull the anchor point
+    // back inside the work area, which is where the menu belongs anyway.
+    POINT nativePoint = {devPoint.x, devPoint.y};
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (::GetMonitorInfo(::MonitorFromPoint(nativePoint, MONITOR_DEFAULTTONEAREST),
+                         &monitorInfo)) {
+      const int32_t workLeft = static_cast<int32_t>(monitorInfo.rcWork.left);
+      const int32_t workTop = static_cast<int32_t>(monitorInfo.rcWork.top);
+      const int32_t workRight =
+          static_cast<int32_t>(monitorInfo.rcWork.right) - 1;
+      const int32_t workBottom =
+          static_cast<int32_t>(monitorInfo.rcWork.bottom) - 1;
+      if (devPoint.x > workRight) {
+        devPoint.x = workRight;
+      }
+      if (devPoint.x < workLeft) {
+        devPoint.x = workLeft;
+      }
+      if (devPoint.y > workBottom) {
+        devPoint.y = workBottom;
+      }
+      if (devPoint.y < workTop) {
+        devPoint.y = workTop;
+      }
+    }
+
+    const CSSIntPoint point =
+        gfx::RoundedToInt(devPoint / pc->CSSToDevPixelScale());
 
     // The menu that is being opened is a Gecko <xul:menu>, and the popup code
     // that manages it expects that the window that the <xul:menu> belongs to
@@ -227,8 +259,10 @@ LRESULT StatusBarEntry::OnMessage(HWND hWnd, UINT msg, WPARAM wp, LPARAM lp) {
     // focuses any window in the parent process).
     ::SetForegroundWindow(win);
     nsXULPopupManager* pm = nsXULPopupManager::GetInstance();
+    // Opened as a context menu so that, if the popup still does not fit, layout
+    // moves it to fit at full size rather than shrinking it.
     pm->ShowPopupAtScreen(popupFrame->GetContent()->AsElement(), point.x,
-                          point.y, false, nullptr);
+                          point.y, /* aIsContextMenu = */ true, nullptr);
   }
 
   return DefWindowProc(hWnd, msg, wp, lp);
