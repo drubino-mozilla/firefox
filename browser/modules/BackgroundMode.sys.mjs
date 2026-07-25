@@ -89,6 +89,13 @@ class BackgroundModeSingleton {
     Services.obs.addObserver(this, "browser-delayed-startup-finished");
 
     this.#syncSurvivalRef();
+
+    // A silent restart, which is how the update flow relaunches a browser that
+    // was left running with no windows, deliberately opens no window at all, so
+    // the notification above will never arrive and there is nothing to wait for.
+    if (Services.startup.wasSilentlyStarted) {
+      this.#onStartupComplete();
+    }
   }
 
   observe(subject, topic) {

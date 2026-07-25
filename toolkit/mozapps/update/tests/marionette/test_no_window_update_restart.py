@@ -39,6 +39,10 @@ class TestNoWindowUpdateRestart(MarionetteTestCase):
                 Services.prefs.setBoolPref("app.update.staging.enabled", false);
                 Services.prefs.setBoolPref("app.update.noWindowAutoRestart.enabled", true);
                 Services.prefs.setIntPref("app.update.noWindowAutoRestart.delayMs", 1000);
+                // On Windows the browser only survives its last window being
+                // closed while background mode is enabled, so the feature under
+                // test is unreachable without this. Harmless on mac.
+                Services.prefs.setBoolPref("browser.backgroundMode.enabled", true);
                 Services.prefs.clearUserPref("testing.no_window_update_restart.silent_restart_env");
 
                 let { UpdateUtils } = ChromeUtils.importESModule(
