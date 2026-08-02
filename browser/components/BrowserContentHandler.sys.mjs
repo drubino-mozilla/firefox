@@ -216,7 +216,10 @@ function needHomepageOverride(updateMilestones = true) {
  * updated.
  *
  * @param  update
- *         The nsIUpdate for the update that has been applied.
+ *         The nsIUpdate for the update that has been applied, or null when the
+ *         milestone changed without the Mozilla updater being involved (for
+ *         example MSIX, Snap, Flatpak and distro packages, which are updated
+ *         out from under us and never write an update record).
  * @param  defaultOverridePage
  *         The default override page
  * @param  nimbusOverridePage
@@ -233,6 +236,19 @@ function getPostUpdateOverridePage(
 ) {
   if (disableWnp) {
     return "";
+  }
+
+  // Without an update record there is no update.xml-provided URL to consider,
+  // so Nimbus is the only remaining source. The policy check still applies:
+  // an administrator who pinned the post-update page outranks an experiment.
+  if (!update) {
+    if (
+      nimbusOverridePage &&
+      Services.policies.isAllowed("postUpdateCustomPage")
+    ) {
+      return nimbusOverridePage;
+    }
+    return defaultOverridePage;
   }
 
   update = update.QueryInterface(Ci.nsIWritablePropertyBag);
@@ -865,8 +881,11 @@ nsBrowserContentHandler.prototype = {
             */
             let update = spinForLastUpdateInstalled();
 
-            // Make sure the update is newer than the last WNP version
-            // and the update is not newer than the current Firefox version.
+            // Discard an update record that cannot describe the milestone
+            // change we just detected, either because it predates the last WNP
+            // or because it is ahead of what we are actually running. Dropping
+            // the record only removes update.xml as a source for the URL; the
+            // milestone change itself still drives the WNP.
             if (
               update &&
               (Services.vc.compare(update.platformVersion, old_mstone) <= 0 ||
@@ -876,12 +895,11 @@ nsBrowserContentHandler.prototype = {
                 ) > 0)
             ) {
               update = null;
-              overridePage = null;
             }
 
             /**
              * If the override URL is provided by an experiment, is a valid
-             * Firefox What's New Page URL, and the update version is less than
+             * Firefox What's New Page URL, and the new version is less than
              * or equal to the maxVersion set by the experiment, we'll try to use
              * the experiment override URL instead of the default or the
              * update-provided URL. Additional policy checks are done in
@@ -911,12 +929,15 @@ nsBrowserContentHandler.prototype = {
               false
             );
             let nimbusWNP;
+            // The version we landed on, which is what min/maxVersion describe.
+            // This is read from appinfo rather than the update record so that
+            // installs updated outside of the Mozilla updater still qualify.
+            const newVersion = Services.appinfo.version;
             // minVersion and maxVersion optional variables
             const versionMatch =
               (!maxVersion ||
-                Services.vc.compare(update.appVersion, maxVersion) <= 0) &&
-              (!minVersion ||
-                Services.vc.compare(update.appVersion, minVersion) >= 0);
+                Services.vc.compare(newVersion, maxVersion) <= 0) &&
+              (!minVersion || Services.vc.compare(newVersion, minVersion) >= 0);
 
             // The update version should be less than or equal to maxVersion and
             // greater or equal to minVersion set by the experiment.
@@ -943,10 +964,18 @@ nsBrowserContentHandler.prototype = {
               }
             }
 
-            if (
-              update &&
-              Services.vc.compare(update.appVersion, old_mstone) > 0
-            ) {
+            // needHomepageOverride only reports that the milestone changed, so
+            // filter out downgrades here. This is deliberately based on the
+            // running build rather than on the update record: the WNP is driven
+            // by the milestone change, which every install crosses, not by the
+            // mechanism that delivered the new version.
+            const isUpgrade =
+              Services.vc.compare(
+                Services.appinfo.platformVersion,
+                old_mstone
+              ) > 0;
+
+            if (isUpgrade) {
               overridePage = getPostUpdateOverridePage(
                 update,
                 overridePage,
@@ -970,7 +999,11 @@ nsBrowserContentHandler.prototype = {
                   .ready()
                   .then(() => nimbusWNPFeature.recordExposureEvent());
               }
+            } else {
+              overridePage = "";
+            }
 
+            if (update && isUpgrade) {
               lazy.LaterRun.enable(lazy.LaterRun.ENABLE_REASON_UPDATE_APPLIED);
             }
 

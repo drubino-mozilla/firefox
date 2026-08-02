@@ -4,6 +4,9 @@ prefs = ["startup.homepage_override_url_nimbus='https://www.firefox.com/en-US/wh
 "startup.homepage_override_nimbus_maxVersion='99999999.0'"]
 
 ["browser_whats_new_page_nimbus.js"]
+run-if = [
+  "!msix", # Supplies an update record, which MSIX builds cannot produce.
+]
 skip-if = [
   "verify-standalone",
 ]

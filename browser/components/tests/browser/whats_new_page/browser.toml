@@ -1,8 +1,4 @@
 [DEFAULT]
-run-if = [
-  "!msix", # Updater is disabled in MSIX builds; what's new pages therefore have no meaning.
-]
-
 reason = "This is a startup test. Verify runs tests multiple times after startup."
 support-files = [
   "active-update.xml",
@@ -19,6 +15,9 @@ prefs = [
 ]
 
 ["browser_whats_new_page.js"]
+run-if = [
+  "!msix", # Supplies an update record, which MSIX builds cannot produce.
+]
 skip-if = [
   "verify-standalone",
 ]
@@ -26,3 +25,5 @@ skip-if = [
 ["include:./browser_whats_new_page_nimbus.toml"]
 
 ["include:./browser_whats_new_page_nimbus_disable.toml"]
+
+["include:./browser_whats_new_page_nimbus_no_update.toml"]

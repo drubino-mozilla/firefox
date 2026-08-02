@@ -1,0 +1,18 @@
+[DEFAULT]
+# Point the updater at an empty directory so that no update record exists. This
+# reproduces installs that are updated outside of the Mozilla updater, which
+# still cross a milestone but never write an update record.
+#
+# Unlike the other tests here this one deliberately has no "!msix" run-if: MSIX
+# is one of the configurations it exists to cover, and it needs no update record
+# to run.
+support-files = ["no_update/README.txt"]
+# Two pipe-separated URLs open two tabs, so that one survives for the test after
+# the harness takes over the current tab and clears its history.
+prefs = ["app.update.altUpdateDirPath='<test-root>/browser/components/tests/browser/whats_new_page/no_update'",
+"startup.homepage_override_url_nimbus='https://www.firefox.com/en-US/whatsnew/|https://www.firefox.com/en-US/whatsnew/'"]
+
+["browser_whats_new_page_nimbus_no_update.js"]
+skip-if = [
+  "verify-standalone",
+]
