@@ -152,6 +152,8 @@ skip-if = [
 
 ["test_closemenu_attribute.xhtml"]
 
+["test_closemenu_on_accel_attribute.xhtml"]
+
 ["test_contextmenu_list.xhtml"]
 
 ["test_contextmenu_rtl.xhtml"]

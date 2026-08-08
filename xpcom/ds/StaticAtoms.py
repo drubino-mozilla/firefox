@@ -264,6 +264,7 @@ STATIC_ATOMS = [
     Atom("closed", "closed"),
     Atom("closedby", "closedby"),
     Atom("closemenu", "closemenu"),
+    Atom("closemenuonaccel", "closemenu-on-accel"),
     Atom("code", "code"),
     Atom("codebase", "codebase"),
     Atom("codetype", "codetype"),

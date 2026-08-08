@@ -674,13 +674,39 @@ void nsXULPopupManager::SetActiveMenuBar(XULMenuBarElement* aMenuBar,
   UpdateKeyboardListeners();
 }
 
-static CloseMenuMode GetCloseMenuMode(nsIContent* aMenu) {
+// Returns how much of the menu chain to close when aMenu is activated.
+//
+// aModifiers and aButton describe the activation. An activation that loads
+// somewhere other than the current tab, that is accel-click, accel-Enter or
+// middle-click, first consults the closemenu-on-accel attribute, which lets a
+// menu stay open so several items can be activated in a row. Callers that do
+// not know how the item was activated get the plain closemenu behaviour.
+static CloseMenuMode GetCloseMenuMode(nsIContent* aMenu,
+                                      Modifiers aModifiers = 0,
+                                      int16_t aButton = 0) {
   if (!aMenu->IsElement()) {
     return CloseMenuMode_Auto;
   }
 
   static Element::AttrValuesArray strings[] = {nsGkAtoms::none,
                                                nsGkAtoms::single, nullptr};
+
+  const bool opensInBackground =
+      (aModifiers & WidgetInputEvent::AccelModifier()) ||
+      aButton == MouseButton::eMiddle;
+  if (opensInBackground) {
+    switch (aMenu->AsElement()->FindAttrValueIn(kNameSpaceID_None,
+                                                nsGkAtoms::closemenuonaccel,
+                                                strings, eCaseMatters)) {
+      case 0:
+        return CloseMenuMode_None;
+      case 1:
+        return CloseMenuMode_Single;
+      default:
+        break;
+    }
+  }
+
   switch (aMenu->AsElement()->FindAttrValueIn(
       kNameSpaceID_None, nsGkAtoms::closemenu, strings, eCaseMatters)) {
     case 0:
@@ -1694,7 +1720,8 @@ void nsXULPopupManager::HideOpenMenusBeforeExecutingMenu(CloseMenuMode aMode) {
 
 void nsXULPopupManager::ExecuteMenu(nsIContent* aMenu,
                                     nsXULMenuCommandEvent* aEvent) {
-  CloseMenuMode cmm = GetCloseMenuMode(aMenu);
+  CloseMenuMode cmm =
+      GetCloseMenuMode(aMenu, aEvent->GetModifiers(), aEvent->GetButton());
   HideOpenMenusBeforeExecutingMenu(cmm);
   aEvent->SetCloseMenuMode(cmm);
   nsCOMPtr<nsIRunnable> event = aEvent;

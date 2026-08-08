@@ -1,0 +1,188 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin" type="text/css"?>
+<?xml-stylesheet href="chrome://mochikit/content/tests/SimpleTest/test.css" type="text/css"?>
+
+<window title="Menu closemenu-on-accel Attribute Tests"
+  onload="setTimeout(runTests, 0);"
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+  <script src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
+  <script src="chrome://mochikit/content/tests/SimpleTest/EventUtils.js"></script>
+
+<button id="menu" type="menu" label="Menu">
+  <menupopup id="outer" nonnative="">
+    <menu id="submenu" label="Sub">
+      <menupopup id="inner" nonnative="">
+        <menuitem id="item" label="Item"/>
+      </menupopup>
+    </menu>
+  </menupopup>
+</button>
+
+<script class="testbody" type="application/javascript">
+<![CDATA[
+
+SimpleTest.waitForExplicitFinish();
+
+function promiseEvent(target, type)
+{
+  return new Promise(resolve =>
+    target.addEventListener(type, resolve, { once: true }));
+}
+
+// Lets any pending popup hiding run before we assert that it didn't happen.
+function promiseSettled()
+{
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function openMenus()
+{
+  let shown = promiseEvent($("outer"), "popupshown");
+  $("menu").open = true;
+  await shown;
+
+  shown = promiseEvent($("inner"), "popupshown");
+  $("submenu").open = true;
+  await shown;
+
+  // Select the menuitem so that Enter activates it.
+  synthesizeKey("KEY_ArrowDown");
+}
+
+async function closeMenus()
+{
+  if ($("outer").state == "closed") {
+    return;
+  }
+  let hidden = promiseEvent($("outer"), "popuphidden");
+  $("menu").open = false;
+  await hidden;
+}
+
+function activateWithEnter(item, accel)
+{
+  synthesizeKey("KEY_Enter", { accelKey: accel });
+}
+
+function activateWithMiddleClick(item)
+{
+  synthesizeMouseAtCenter(item, { button: 1 });
+}
+
+async function runCase(test)
+{
+  let item = $("item");
+  item.removeAttribute("closemenu");
+  item.removeAttribute("closemenu-on-accel");
+  for (let name in test.attrs) {
+    item.setAttribute(name, test.attrs[name]);
+  }
+
+  await openMenus();
+
+  // Create the promises up front, since popups are hidden before the command
+  // event is dispatched.
+  let commanded = promiseEvent(item, "command");
+  let innerHidden = test.inner == "closed"
+                    ? promiseEvent($("inner"), "popuphidden") : null;
+  let outerHidden = test.outer == "closed"
+                    ? promiseEvent($("outer"), "popuphidden") : null;
+
+  test.activate(item);
+
+  await commanded;
+  if (innerHidden) {
+    await innerHidden;
+  }
+  if (outerHidden) {
+    await outerHidden;
+  }
+  await promiseSettled();
+
+  is($("inner").state, test.inner, test.desc + ": inner popup");
+  is($("outer").state, test.outer, test.desc + ": outer popup");
+
+  await closeMenus();
+}
+
+var gTests = [
+  {
+    desc: "no attributes, accel+Enter",
+    attrs: {},
+    activate: item => activateWithEnter(item, true),
+    inner: "closed",
+    outer: "closed",
+  },
+  {
+    desc: "closemenu-on-accel=none, plain Enter",
+    attrs: { "closemenu-on-accel": "none" },
+    activate: item => activateWithEnter(item, false),
+    inner: "closed",
+    outer: "closed",
+  },
+  {
+    desc: "closemenu-on-accel=none, accel+Enter",
+    attrs: { "closemenu-on-accel": "none" },
+    activate: item => activateWithEnter(item, true),
+    inner: "open",
+    outer: "open",
+  },
+  {
+    desc: "closemenu-on-accel=none, middle click",
+    attrs: { "closemenu-on-accel": "none" },
+    activate: activateWithMiddleClick,
+    inner: "open",
+    outer: "open",
+  },
+  {
+    desc: "closemenu-on-accel=single, accel+Enter",
+    attrs: { "closemenu-on-accel": "single" },
+    activate: item => activateWithEnter(item, true),
+    inner: "closed",
+    outer: "open",
+  },
+  {
+    desc: "closemenu=none still applies to accel+Enter",
+    attrs: { closemenu: "none" },
+    activate: item => activateWithEnter(item, true),
+    inner: "open",
+    outer: "open",
+  },
+  {
+    desc: "closemenu-on-accel overrides closemenu for accel+Enter",
+    attrs: { closemenu: "single", "closemenu-on-accel": "none" },
+    activate: item => activateWithEnter(item, true),
+    inner: "open",
+    outer: "open",
+  },
+  {
+    desc: "closemenu-on-accel falls back to closemenu for plain Enter",
+    attrs: { closemenu: "single", "closemenu-on-accel": "none" },
+    activate: item => activateWithEnter(item, false),
+    inner: "closed",
+    outer: "open",
+  },
+];
+
+async function runTests()
+{
+  for (let test of gTests) {
+    await runCase(test);
+  }
+  SimpleTest.finish();
+}
+
+]]>
+</script>
+
+<body xmlns="http://www.w3.org/1999/xhtml">
+<p id="display">
+</p>
+<div id="content" style="display: none">
+</div>
+<pre id="test">
+</pre>
+</body>
+
+</window>

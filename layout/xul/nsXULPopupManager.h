@@ -356,6 +356,10 @@ class nsXULMenuCommandEvent : public mozilla::Runnable {
     mCloseMenuMode = aCloseMenuMode;
   }
 
+  // How the item was activated, used to decide the close menu mode.
+  mozilla::Modifiers GetModifiers() const { return mModifiers; }
+  int16_t GetButton() const { return mButton; }
+
  private:
   RefPtr<Element> mMenu;
 
