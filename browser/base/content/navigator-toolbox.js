@@ -177,28 +177,6 @@ document.addEventListener(
     navigatorToolbox.addEventListener("mousedown", onMouseDown);
     widgetOverflow.addEventListener("mousedown", onMouseDown);
 
-    function onMouseUp(event) {
-      let element = event.target.closest(`
-        #PlacesToolbar,
-        #BMB_bookmarksPopup
-        `);
-      if (!element) {
-        return;
-      }
-
-      switch (element.id) {
-        case "PlacesToolbar":
-        case "BMB_bookmarksPopup":
-          BookmarksEventHandler.onMouseUp(event);
-          break;
-
-        default:
-          throw new Error(`Missing case for #${element.id}`);
-      }
-    }
-    navigatorToolbox.addEventListener("mouseup", onMouseUp);
-    widgetOverflow.addEventListener("mouseup", onMouseUp);
-
     function onClick(event) {
       const isLeftClick = event.button === 0;
 

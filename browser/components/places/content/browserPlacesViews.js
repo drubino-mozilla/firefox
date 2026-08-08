@@ -406,6 +406,9 @@ class PlacesViewBase {
           "scheme",
           PlacesUIUtils.guessUrlSchemeForUI(aPlacesNode.uri)
         );
+        if (!PlacesUIUtils.openInTabClosesMenu) {
+          element.setAttribute("closemenu-on-accel", "none");
+        }
       } else if (PlacesUtils.containerTypes.includes(type)) {
         element = document.createXULElement("menu");
         element.setAttribute("container", "true");
@@ -2294,22 +2297,20 @@ this.PlacesPanelview = class PlacesPanelview extends PlacesViewBase {
 
     let modifKey =
       AppConstants.platform === "macosx" ? event.metaKey : event.ctrlKey;
-    if (!PlacesUIUtils.openInTabClosesMenu && modifKey) {
-      // If 'Recent Bookmarks' in Bookmarks Panel.
-      if (button.parentNode.id == "panelMenu_bookmarksMenu") {
-        button.setAttribute("closemenu", "none");
-      }
+    let isMiddleClick = event.type == "click" && event.button == 1;
+    // Accel-click and middle-click load in a background tab, so the panel can
+    // be left open to activate several items in a row.
+    let keepOpen =
+      !PlacesUIUtils.openInTabClosesMenu && (modifKey || isMiddleClick);
+    if (keepOpen) {
+      button.setAttribute("closemenu", "none");
     } else {
       button.removeAttribute("closemenu");
     }
     PlacesUIUtils.openNodeWithEvent(button._placesNode, event);
-    // Unlike left-click, middle-click requires manual menu closing.
-    if (
-      button.parentNode.id != "panelMenu_bookmarksMenu" ||
-      (event.type == "click" &&
-        event.button == 1 &&
-        PlacesUIUtils.openInTabClosesMenu)
-    ) {
+    // CustomizableUI only auto-hides the panel for primary clicks and command
+    // events, so a middle-click that should dismiss it has to do so here.
+    if (isMiddleClick && !keepOpen) {
       this.panelMultiView.closest("panel").hidePopup();
     }
   }
@@ -2333,10 +2334,7 @@ this.PlacesPanelview = class PlacesPanelview extends PlacesViewBase {
       // is set by PlacesUIUtils.openInContainerTab to close the panel.
       case "placesCmd_open:newcontainertab":
       case "placesCmd_open:tab":
-        if (
-          this._viewElt.id != "PanelUI-bookmarks" ||
-          PlacesUIUtils.openInTabClosesMenu
-        ) {
+        if (PlacesUIUtils.openInTabClosesMenu) {
           this.panelMultiView.closest("panel").hidePopup();
         }
         break;

@@ -152,10 +152,6 @@ document.addEventListener(
       );
     });
 
-    bookmarksMenuPopup.addEventListener("mouseup", event => {
-      BookmarksEventHandler.onMouseUp(event);
-    });
-
     const bookmarksMenu = document.getElementById("bookmarksMenu");
     bookmarksMenu.addEventListener("dragover", event =>
       PlacesMenuDNDHandler.onDragOver(event)
