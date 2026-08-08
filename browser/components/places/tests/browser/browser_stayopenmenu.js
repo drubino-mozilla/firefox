@@ -311,8 +311,11 @@ async function closeMenu(menu, popup) {
   await hidden;
 }
 
-// Ctrl-Enter should leave the menu open, just like ctrl-click.
-add_task(async function testStayopenKeyboardActivation() {
+// Activating with the accel modifier held should leave the menu open, whether
+// that came from the mouse or the keyboard. Real key handling is covered by
+// toolkit's test_closemenu_on_accel_attribute.xhtml; activateItem is used here
+// because it is the supported way to activate a menuitem from a test.
+add_task(async function testStayopenAccelActivation() {
   if (NATIVE_MENUBAR) {
     return;
   }
@@ -321,16 +324,13 @@ add_task(async function testStayopenKeyboardActivation() {
 
   let testMenuitem = [...BMpopup.children].find(node => node.label == "Test1");
   ok(testMenuitem, "Found test bookmark.");
-  // activeChild proxies to the popup's active menu child, which is the item
-  // the popup manager activates on Enter.
-  BM.activeChild = testMenuitem;
 
   let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
-  EventUtils.synthesizeKey("KEY_Enter", { accelKey: true });
+  BMpopup.activateItem(testMenuitem, ACCEL);
   let newTab = await promiseTabOpened;
-  ok(true, "Bookmark ctrl-Enter opened new tab.");
+  ok(true, "Bookmark accel activation opened new tab.");
   BrowserTestUtils.removeTab(newTab);
-  ok(BM.open, "Bookmarks Menu should still be open after ctrl-Enter.");
+  ok(BM.open, "Bookmarks Menu should still be open after accel activation.");
 
   await closeMenu(BM, BMpopup);
 });
