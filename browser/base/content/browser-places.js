@@ -775,35 +775,6 @@ var BookmarksEventHandler = {
    * @param aView
    *        The places view which aEvent should be associated with.
    */
-
-  onMouseUp(aEvent) {
-    // Handles middle-click or left-click with modifier if not browser.bookmarks.openInTabClosesMenu.
-    if (aEvent.button == 2 || PlacesUIUtils.openInTabClosesMenu) {
-      return;
-    }
-    let target = aEvent.originalTarget;
-    if (target.tagName != "menuitem") {
-      return;
-    }
-    let modifKey =
-      AppConstants.platform === "macosx" ? aEvent.metaKey : aEvent.ctrlKey;
-    if (modifKey || aEvent.button == 1) {
-      target.setAttribute("closemenu", "none");
-      var menupopup = target.parentNode;
-      menupopup.addEventListener(
-        "popuphidden",
-        () => {
-          target.removeAttribute("closemenu");
-        },
-        { once: true }
-      );
-    } else {
-      // Handles edge case where same menuitem was opened previously
-      // while menu was kept open, but now menu should close.
-      target.removeAttribute("closemenu");
-    }
-  },
-
   onClick: function BEH_onClick(aEvent, aView) {
     // Only handle middle-click or left-click with modifiers.
     let modifKey;

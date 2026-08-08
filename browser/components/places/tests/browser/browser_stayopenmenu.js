@@ -2,7 +2,14 @@
  * http://creativecommons.org/publicdomain/zero/1.0/ */
 
 // Menus should stay open (if pref is set) after ctrl-click, middle-click,
-// and contextmenu's "Open in a new tab" click.
+// ctrl-Enter, and contextmenu's "Open in a new tab" click.
+
+const ACCEL =
+  AppConstants.platform === "macosx" ? { metaKey: true } : { ctrlKey: true };
+
+// The menubar is a native menu on Mac, which doesn't route mouse or keyboard
+// activation through the closemenu attribute this feature relies on.
+const NATIVE_MENUBAR = AppConstants.platform === "macosx";
 
 async function locateBookmarkAndTestCtrlClick(menupopup) {
   let testMenuitem = [...menupopup.children].find(
@@ -82,8 +89,32 @@ add_setup(async function () {
     title: "Test1",
   });
 
+  // A folder in the Bookmarks Menu, so we can check that opening a whole
+  // folder in tabs also leaves the menu open.
+  let menuFolder = await PlacesUtils.bookmarks.insert({
+    parentGuid: PlacesUtils.bookmarks.menuGuid,
+    type: PlacesUtils.bookmarks.TYPE_FOLDER,
+    title: "TEST_MENU_FOLDER",
+  });
+  await PlacesUtils.bookmarks.insert({
+    parentGuid: menuFolder.guid,
+    url: "https://example.com/infolder1",
+    title: "InFolder1",
+  });
+  await PlacesUtils.bookmarks.insert({
+    parentGuid: menuFolder.guid,
+    url: "https://example.com/infolder2",
+    title: "InFolder2",
+  });
+
+  // A history entry, for the History menu tests.
+  await PlacesTestUtils.addVisits([
+    { uri: "https://example.com/history1", title: "History1" },
+  ]);
+
   registerCleanupFunction(async function () {
     await PlacesUtils.bookmarks.eraseEverything();
+    await PlacesUtils.history.clear();
     // if BMB was not originally in UI, remove it.
     if (!origBMBlocation) {
       CustomizableUI.removeWidgetFromArea("bookmarks-menu-button");
@@ -164,9 +195,8 @@ add_task(async function testStayopenBookmarksClicks() {
   appMenuPopup.hidePopup();
   ok(!appMenu.open, "The menu should now be closed.");
 
-  // Disable the rest of the tests on Mac due to Mac's handling of menus being
-  // slightly different to the other platforms.
-  if (AppConstants.platform === "macosx") {
+  // The remaining checks use the menubar, which is a native menu on Mac.
+  if (NATIVE_MENUBAR) {
     return;
   }
 
@@ -264,4 +294,165 @@ add_task(async function testStayopenBookmarksClicks() {
   toolbarbutton.open = false;
   await promiseEvent;
   BrowserTestUtils.removeTab(newTab);
+});
+
+async function openBookmarksMenu() {
+  let BM = document.getElementById("bookmarksMenu");
+  let BMpopup = document.getElementById("bookmarksMenuPopup");
+  let shown = BrowserTestUtils.waitForEvent(BMpopup, "popupshown");
+  EventUtils.synthesizeMouseAtCenter(BM, {});
+  await shown;
+  return [BM, BMpopup];
+}
+
+async function closeMenu(menu, popup) {
+  let hidden = BrowserTestUtils.waitForEvent(popup, "popuphidden");
+  menu.open = false;
+  await hidden;
+}
+
+// Activating with the accel modifier held should leave the menu open, whether
+// that came from the mouse or the keyboard. Real key handling is covered by
+// toolkit's test_closemenu_on_accel_attribute.xhtml; activateItem is used here
+// because it is the supported way to activate a menuitem from a test.
+add_task(async function testStayopenAccelActivation() {
+  if (NATIVE_MENUBAR) {
+    return;
+  }
+
+  let [BM, BMpopup] = await openBookmarksMenu();
+
+  let testMenuitem = [...BMpopup.children].find(node => node.label == "Test1");
+  ok(testMenuitem, "Found test bookmark.");
+
+  let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
+  BMpopup.activateItem(testMenuitem, ACCEL);
+  let newTab = await promiseTabOpened;
+  ok(true, "Bookmark accel activation opened new tab.");
+  BrowserTestUtils.removeTab(newTab);
+  ok(BM.open, "Bookmarks Menu should still be open after accel activation.");
+
+  await closeMenu(BM, BMpopup);
+});
+
+// Opening a whole folder in tabs should also leave the menu open. This is the
+// behaviour added by bug 1420749; folders are <menu> elements which never fire
+// a command event, so they rely on BookmarksEventHandler.onClick rather than
+// on the closemenu attribute.
+add_task(async function testStayopenFolderInMenu() {
+  if (NATIVE_MENUBAR) {
+    return;
+  }
+
+  let [BM, BMpopup] = await openBookmarksMenu();
+
+  let folderMenu = [...BMpopup.children].find(
+    node => node.label == "TEST_MENU_FOLDER"
+  );
+  ok(folderMenu, "Found the test folder in the Bookmarks Menu.");
+
+  // Match on the number of tabs rather than their urls: these load in the
+  // background, so a tab is still at about:blank when TabOpen fires.
+  let tabs = [];
+  let bothOpened = new Promise(resolve => {
+    let onTabOpen = event => {
+      tabs.push(event.target);
+      if (tabs.length == 2) {
+        gBrowser.tabContainer.removeEventListener("TabOpen", onTabOpen);
+        resolve();
+      }
+    };
+    gBrowser.tabContainer.addEventListener("TabOpen", onTabOpen);
+  });
+  EventUtils.synthesizeMouseAtCenter(folderMenu, { button: 1 });
+  await bothOpened;
+  ok(true, "Folder middle-click opened all its bookmarks in tabs.");
+  ok(BM.open, "Bookmarks Menu should still be open after opening a folder.");
+
+  for (let tab of tabs) {
+    BrowserTestUtils.removeTab(tab);
+  }
+  await closeMenu(BM, BMpopup);
+});
+
+// The History menu should behave like the Bookmarks menu.
+add_task(async function testStayopenHistoryMenu() {
+  if (NATIVE_MENUBAR) {
+    return;
+  }
+
+  let historyMenu = document.getElementById("history-menu");
+  let historyPopup = document.getElementById("historyMenuPopup");
+  let shown = BrowserTestUtils.waitForEvent(historyPopup, "popupshown");
+  EventUtils.synthesizeMouseAtCenter(historyMenu, {});
+  await shown;
+
+  let historyItem = [...historyPopup.children].find(
+    node => node.label == "History1"
+  );
+  ok(historyItem, "Found the history entry.");
+
+  let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
+  historyPopup.activateItem(historyItem, ACCEL);
+  let newTab = await promiseTabOpened;
+  ok(true, "History entry ctrl-click opened new tab.");
+  BrowserTestUtils.removeTab(newTab);
+  ok(historyMenu.open, "History Menu should still be open after ctrl-click.");
+
+  promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
+  historyPopup.activateItem(historyItem, { button: 1 });
+  newTab = await promiseTabOpened;
+  ok(true, "History entry middle-click opened new tab.");
+  BrowserTestUtils.removeTab(newTab);
+  ok(historyMenu.open, "History Menu should still be open after middle-click.");
+
+  await closeMenu(historyMenu, historyPopup);
+});
+
+// The App Menu's History subview should behave like its Bookmarks subview.
+add_task(async function testStayopenAppMenuHistory() {
+  let appMenu = document.getElementById("PanelUI-menu-button");
+  let appMenuPopup = document.getElementById("appMenu-popup");
+  let shown = BrowserTestUtils.waitForEvent(appMenuPopup, "popupshown");
+  appMenu.click();
+  await shown;
+
+  // The subview only exists in the document once it has been shown, so the
+  // button has to be clicked before the panelview can be looked up.
+  document.getElementById("appMenu-history-button").click();
+  let historyView = document.getElementById("PanelUI-history");
+  await BrowserTestUtils.waitForEvent(historyView, "ViewShown");
+  info("History panel shown.");
+
+  // The list is filled from a Places query, so it is not necessarily populated
+  // by the time ViewShown fires. Any entry will do: earlier tasks in this file
+  // have loaded pages, so which one sorts to the top is not predictable.
+  let list = document.getElementById("appMenu_historyMenu");
+  let historyButton;
+  await TestUtils.waitForCondition(() => {
+    historyButton = [...list.children].find(node => node._placesNode);
+    return !!historyButton;
+  }, "Waiting for a history entry to appear in the App Menu.");
+  ok(historyButton, "Found a history entry in the App Menu.");
+
+  let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
+  EventUtils.synthesizeMouseAtCenter(historyButton, { accelKey: true });
+  let newTab = await promiseTabOpened;
+  ok(true, "History entry ctrl-click opened new tab.");
+  BrowserTestUtils.removeTab(newTab);
+  ok(
+    PanelView.forNode(historyView).active,
+    "Should still show the history subview"
+  );
+  ok(appMenu.open, "Menu should remain open.");
+
+  promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
+  EventUtils.synthesizeMouseAtCenter(historyButton, { button: 1 });
+  newTab = await promiseTabOpened;
+  ok(true, "History entry middle-click opened new tab.");
+  BrowserTestUtils.removeTab(newTab);
+  ok(appMenu.open, "Menu should remain open.");
+
+  appMenuPopup.hidePopup();
+  ok(!appMenu.open, "The menu should now be closed.");
 });
