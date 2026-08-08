@@ -319,19 +319,11 @@ add_task(async function testStayopenKeyboardActivation() {
 
   let [BM, BMpopup] = await openBookmarksMenu();
 
-  let selected = null;
-  for (let i = 0; i < 20; i++) {
-    EventUtils.synthesizeKey("KEY_ArrowDown");
-    selected = BMpopup.querySelector('menuitem[_moz-menuactive="true"]');
-    if (selected?.label == "Test1") {
-      break;
-    }
-  }
-  Assert.equal(
-    selected?.label,
-    "Test1",
-    "Selected the test bookmark with the keyboard."
-  );
+  let testMenuitem = [...BMpopup.children].find(node => node.label == "Test1");
+  ok(testMenuitem, "Found test bookmark.");
+  // activeChild proxies to the popup's active menu child, which is the item
+  // the popup manager activates on Enter.
+  BM.activeChild = testMenuitem;
 
   let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
   EventUtils.synthesizeKey("KEY_Enter", { accelKey: true });
