@@ -351,12 +351,21 @@ add_task(async function testStayopenFolderInMenu() {
   );
   ok(folderMenu, "Found the test folder in the Bookmarks Menu.");
 
-  let tabPromises = [
-    BrowserTestUtils.waitForNewTab(gBrowser, "https://example.com/infolder1"),
-    BrowserTestUtils.waitForNewTab(gBrowser, "https://example.com/infolder2"),
-  ];
+  // Match on the number of tabs rather than their urls: these load in the
+  // background, so a tab is still at about:blank when TabOpen fires.
+  let tabs = [];
+  let bothOpened = new Promise(resolve => {
+    let onTabOpen = event => {
+      tabs.push(event.target);
+      if (tabs.length == 2) {
+        gBrowser.tabContainer.removeEventListener("TabOpen", onTabOpen);
+        resolve();
+      }
+    };
+    gBrowser.tabContainer.addEventListener("TabOpen", onTabOpen);
+  });
   EventUtils.synthesizeMouseAtCenter(folderMenu, { button: 1 });
-  let tabs = await Promise.all(tabPromises);
+  await bothOpened;
   ok(true, "Folder middle-click opened all its bookmarks in tabs.");
   ok(BM.open, "Bookmarks Menu should still be open after opening a folder.");
 
@@ -408,16 +417,23 @@ add_task(async function testStayopenAppMenuHistory() {
   appMenu.click();
   await shown;
 
-  let historyView = document.getElementById("PanelUI-history");
-  let viewShown = BrowserTestUtils.waitForEvent(historyView, "ViewShown");
+  // The subview only exists in the document once it has been shown, so the
+  // button has to be clicked before the panelview can be looked up.
   document.getElementById("appMenu-history-button").click();
-  await viewShown;
+  let historyView = document.getElementById("PanelUI-history");
+  await BrowserTestUtils.waitForEvent(historyView, "ViewShown");
   info("History panel shown.");
 
-  let historyButton = [
-    ...document.getElementById("appMenu_historyMenu").children,
-  ].find(node => node.label == "History1");
-  ok(historyButton, "Found the history entry in the App Menu.");
+  // The list is filled from a Places query, so it is not necessarily populated
+  // by the time ViewShown fires. Any entry will do: earlier tasks in this file
+  // have loaded pages, so which one sorts to the top is not predictable.
+  let list = document.getElementById("appMenu_historyMenu");
+  let historyButton;
+  await TestUtils.waitForCondition(() => {
+    historyButton = [...list.children].find(node => node._placesNode);
+    return !!historyButton;
+  }, "Waiting for a history entry to appear in the App Menu.");
+  ok(historyButton, "Found a history entry in the App Menu.");
 
   let promiseTabOpened = BrowserTestUtils.waitForNewTab(gBrowser, null);
   EventUtils.synthesizeMouseAtCenter(historyButton, { accelKey: true });
