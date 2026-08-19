@@ -166,9 +166,10 @@ export var WindowsLaunchOnLogin = {
   },
 
   /**
-   * Gets a list of all launch on login shortcuts in the
-   * %USERNAME%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup folder
-   * that point to the current Firefox executable.
+   * Gets a list of all launch on login shortcuts that point to the current
+   * Firefox executable. Both the per-user Startup folder
+   * (%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup) and the all-users
+   * Startup folder (%ProgramData%\...\Start Menu\Programs\StartUp) are covered.
    */
   getLaunchOnLoginShortcutList() {
     let shellService = Cc["@mozilla.org/browser/shell-service;1"].getService(
@@ -178,14 +179,20 @@ export var WindowsLaunchOnLogin = {
   },
 
   /**
-   * Safely removes all launch on login shortcuts in the
-   * %USERNAME%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup folder
-   * that point to the current Firefox executable.
+   * Safely removes all launch on login shortcuts that point to the current
+   * Firefox executable, from both the per-user and the all-users Startup
+   * folders. Shortcuts we lack permission to delete (all-users shortcuts
+   * require administrator rights) are skipped rather than aborting the rest of
+   * the removal.
    */
   async _removeLaunchOnLoginShortcuts() {
     let shortcuts = this.getLaunchOnLoginShortcutList();
     for (let i = 0; i < shortcuts.length; i++) {
-      await IOUtils.remove(shortcuts[i]);
+      try {
+        await IOUtils.remove(shortcuts[i]);
+      } catch (e) {
+        console.error("Failed to remove launch on login shortcut", e);
+      }
     }
   },
 

@@ -5093,6 +5093,8 @@ int XREMain::XRE_mainStartup(bool* aExitFlag,
     STARTUPINFOW si;
     GetStartupInfoW(&si);
     if (si.dwFlags & STARTF_TITLEISAPPID) {
+      // With an AUMID present the launching shortcut path is unavailable, so a
+      // launch from a Startup-folder shortcut cannot be detected here.
       NS_WARNING("AUMID was already set, shortcut may have been lost.");
     } else if ((si.dwFlags & STARTF_TITLEISLINKNAME) && si.lpTitle) {
       gProcessStartupShortcut.Assign(si.lpTitle);
