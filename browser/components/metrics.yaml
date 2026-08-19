@@ -609,8 +609,10 @@ os.environment:
     description: >
       Records how Firefox was started on Windows. Currently will be one of
       "Desktop", "DesktopPrivate", "StartMenu" (including pins),
-      "StartMenuPrivate", "Taskbar", "TaskbarPrivate", "OtherShortcut", or
-      "Other"
+      "StartMenuPrivate", "Taskbar", "TaskbarPrivate", "Autostart",
+      "TaskbarTab", "OtherShortcut", or "Other". "Autostart" covers launches
+      from Firefox's own launch-on-login setting and launches from a Firefox
+      shortcut in the per-user or all-users Startup folder.
       This metric was generated to correspond to the Legacy Telemetry
       scalar os.environment.launch_method.
     bugs:
