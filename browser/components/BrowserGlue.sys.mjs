@@ -148,7 +148,8 @@ BrowserInitState.startupIdleTaskPromise = new Promise(resolve => {
   BrowserInitState._resolveStartupIdleTask = resolve;
 });
 // Whether this launch was initiated by the OS.  A launch-on-login will contain
-// the "os-autostart" flag in the initial launch command line.
+// the "os-autostart" flag in the initial launch command line, or on Windows be
+// launched from a Startup-folder shortcut (see the "app-startup" case below).
 BrowserInitState.isLaunchOnLogin = false;
 // Whether this launch was initiated by a taskbar tab shortcut. A launch from
 // a taskbar tab shortcut will contain the "taskbar-tab" flag.
@@ -320,11 +321,39 @@ BrowserGlue.prototype = {
         // TaskbarTabCmd.sys.mjs
         BrowserInitState.isTaskbarTab =
           subject.findFlag("taskbar-tab", false) != -1;
+        // On Windows a launch-on-login session is detected two ways:
+        //   1. The Run-key / MSIX entry Firefox writes launches us with the
+        //      "os-autostart" flag (handled by handleFlag below).
+        //   2. A Firefox shortcut in a Startup folder launches us; Windows
+        //      hands the .lnk path to the process (STARTF_TITLEISLINKNAME),
+        //      surfaced as Services.appinfo.processStartupShortcut and
+        //      classified as "Autostart".
+        // Known false negative: if the launching Startup shortcut carries an
+        // AppUserModelID (e.g. the user copied Firefox's installed Start
+        // Menu/desktop shortcut, which stamps an AUMID), Windows reports
+        // STARTF_TITLEISAPPID and lpTitle holds the AUMID instead of the .lnk
+        // path, so processStartupShortcut is empty and this case is missed.
+        // Acceptable: isLaunchOnLogin only gates the "Firefox enabled
+        // launch-on-login without asking" messaging and launch-method
+        // telemetry, so a miss means no message / a different telemetry
+        // bucket, not incorrect behavior.
         BrowserInitState.isLaunchOnLogin = subject.handleFlag(
           "os-autostart",
           false
         );
         if (AppConstants.platform == "win") {
+          if (!BrowserInitState.isLaunchOnLogin) {
+            try {
+              let shellService = Cc[
+                "@mozilla.org/browser/shell-service;1"
+              ].getService(Ci.nsIWindowsShellService);
+              BrowserInitState.isLaunchOnLogin = shellService
+                .classifyShortcut(Services.appinfo.processStartupShortcut)
+                .startsWith("Autostart");
+            } catch (e) {
+              console.error("Failed to classify the startup shortcut", e);
+            }
+          }
           lazy.StartupOSIntegration.checkForLaunchOnLogin();
         }
         break;
