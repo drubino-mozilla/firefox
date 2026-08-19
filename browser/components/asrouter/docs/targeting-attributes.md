@@ -1542,7 +1542,14 @@ declare const crashCountInLastWeek: Promise<number>;
 
 ### `isLaunchOnLogin`
 
-`true` if this Firefox launch was initiated by the OS on login. Detected via the `-os-autostart` command-line flag, which is only injected by the Windows launch-on-login paths. This attribute is always `false` on macOS and Linux. It also will not detect cases where a user has manually added Firefox to OS-level login items outside of Firefox's own launch-on-login setting.
+`true` if this Firefox launch was initiated by the OS on login. On Windows this is the case when either:
+
+1. Firefox was launched with the `-os-autostart` command-line flag, which is injected by the Run key entry or MSIX startup task that Firefox writes for its own launch-on-login setting, or
+2. the session was launched from a Firefox shortcut in the per-user or all-users Startup folder.
+
+There is a known false negative: a Startup folder shortcut that carries an AppUserModelID, for example a copy of Firefox's installed Start Menu or desktop shortcut, is not detected. Windows reports `STARTF_TITLEISAPPID` for such a launch and the `.lnk` path is not made available to the process, so the shortcut cannot be classified.
+
+This attribute is always `false` on macOS and Linux.
 
 #### Definition
 
