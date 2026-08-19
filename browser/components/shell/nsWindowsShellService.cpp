@@ -1380,32 +1380,6 @@ nsWindowsShellService::GetLaunchOnLoginShortcuts(
     nsTArray<nsString>& aShortcutPaths) {
   aShortcutPaths.Clear();
 
-  // Get AppData\\Roaming folder using a known folder ID
-  RefPtr<IKnownFolderManager> fManager;
-  RefPtr<IKnownFolder> roamingAppData;
-  LPWSTR roamingAppDataW;
-  nsString roamingAppDataNS;
-  HRESULT hr =
-      CoCreateInstance(CLSID_KnownFolderManager, nullptr, CLSCTX_INPROC_SERVER,
-                       IID_IKnownFolderManager, getter_AddRefs(fManager));
-  if (FAILED(hr)) {
-    return NS_ERROR_ABORT;
-  }
-  fManager->GetFolder(FOLDERID_RoamingAppData,
-                      roamingAppData.StartAssignment());
-  hr = roamingAppData->GetPath(0, &roamingAppDataW);
-  if (FAILED(hr)) {
-    return NS_ERROR_FILE_NOT_FOUND;
-  }
-
-  // Append startup folder to AppData\\Roaming
-  roamingAppDataNS.Assign(roamingAppDataW);
-  CoTaskMemFree(roamingAppDataW);
-  nsString startupFolder =
-      roamingAppDataNS +
-      u"\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"_ns;
-  nsString startupFolderWildcard = startupFolder + u"\\*.lnk"_ns;
-
   // Get known path for binary file for later comparison with shortcuts.
   // Returns lowercase file path which should be fine for Windows as all
   // directories and files are case-insensitive by default.
@@ -1420,51 +1394,69 @@ nsWindowsShellService::GetLaunchOnLoginShortcuts(
     return NS_ERROR_FILE_UNRECOGNIZED_PATH;
   }
 
-  // Check for if first file exists with a shortcut extension (.lnk)
-  WIN32_FIND_DATAW ffd;
-  HANDLE fileHandle = INVALID_HANDLE_VALUE;
-  fileHandle = FindFirstFileW(startupFolderWildcard.get(), &ffd);
-  if (fileHandle == INVALID_HANDLE_VALUE) {
-    // This means that no files were found in the folder which
-    // doesn't imply an error. Most of the time the user won't
-    // have any shortcuts here.
-    return NS_OK;
+  // Both the per-user and the all-users Startup folder can hold a shortcut
+  // that launches Firefox on login.
+  KNOWNFOLDERID folderIds[] = {FOLDERID_Startup, FOLDERID_CommonStartup};
+  for (KNOWNFOLDERID folderId : folderIds) {
+    UniquePtr<wchar_t, mozilla::CoTaskMemFreeDeleter> folderPath;
+    HRESULT hr = SHGetKnownFolderPath(folderId, SHGFP_TYPE_CURRENT, nullptr,
+                                      getter_Transfers(folderPath));
+    if (FAILED(hr)) {
+      continue;
+    }
+
+    nsString startupFolder(folderPath.get());
+    nsString startupFolderWildcard = startupFolder + u"\\*.lnk"_ns;
+
+    // Check for if first file exists with a shortcut extension (.lnk)
+    WIN32_FIND_DATAW ffd;
+    HANDLE fileHandle = FindFirstFileW(startupFolderWildcard.get(), &ffd);
+    if (fileHandle == INVALID_HANDLE_VALUE) {
+      // This means that no files were found in the folder which
+      // doesn't imply an error. Most of the time the user won't
+      // have any shortcuts here.
+      continue;
+    }
+
+    do {
+      // Extract shortcut target path from every
+      // shortcut in the startup folder.
+      nsString fileName(ffd.cFileName);
+      RefPtr<IShellLinkW> link;
+      RefPtr<IPersistFile> ppf;
+      nsString target;
+      target.SetLength(MAX_PATH);
+      CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                       IID_IShellLinkW, getter_AddRefs(link));
+      if (NS_WARN_IF(!link)) {
+        continue;
+      }
+      hr = link->QueryInterface(IID_IPersistFile, getter_AddRefs(ppf));
+      if (NS_WARN_IF(FAILED(hr))) {
+        continue;
+      }
+      nsString filePath = startupFolder + u"\\"_ns + fileName;
+      hr = ppf->Load(filePath.get(), STGM_READ);
+      if (NS_WARN_IF(FAILED(hr))) {
+        continue;
+      }
+      hr = link->GetPath(target.get(), MAX_PATH, nullptr, 0);
+      if (NS_WARN_IF(FAILED(hr))) {
+        continue;
+      }
+
+      // If shortcut target matches known binary file value
+      // then add the path to the shortcut as a valid
+      // startup shortcut. This has to be a substring search as
+      // the user could have added unknown command line arguments
+      // to the shortcut.
+      if (_wcsnicmp(target.get(), binPath.get(), binPath.Length()) == 0) {
+        aShortcutPaths.AppendElement(filePath);
+      }
+    } while (FindNextFile(fileHandle, &ffd) != 0);
+    FindClose(fileHandle);
   }
 
-  do {
-    // Extract shortcut target path from every
-    // shortcut in the startup folder.
-    nsString fileName(ffd.cFileName);
-    RefPtr<IShellLinkW> link;
-    RefPtr<IPersistFile> ppf;
-    nsString target;
-    target.SetLength(MAX_PATH);
-    CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                     IID_IShellLinkW, getter_AddRefs(link));
-    hr = link->QueryInterface(IID_IPersistFile, getter_AddRefs(ppf));
-    if (NS_WARN_IF(FAILED(hr))) {
-      continue;
-    }
-    nsString filePath = startupFolder + u"\\"_ns + fileName;
-    hr = ppf->Load(filePath.get(), STGM_READ);
-    if (NS_WARN_IF(FAILED(hr))) {
-      continue;
-    }
-    hr = link->GetPath(target.get(), MAX_PATH, nullptr, 0);
-    if (NS_WARN_IF(FAILED(hr))) {
-      continue;
-    }
-
-    // If shortcut target matches known binary file value
-    // then add the path to the shortcut as a valid
-    // startup shortcut. This has to be a substring search as
-    // the user could have added unknown command line arguments
-    // to the shortcut.
-    if (_wcsnicmp(target.get(), binPath.get(), binPath.Length()) == 0) {
-      aShortcutPaths.AppendElement(filePath);
-    }
-  } while (FindNextFile(fileHandle, &ffd) != 0);
-  FindClose(fileHandle);
   return NS_OK;
 }
 
@@ -2675,11 +2667,16 @@ nsWindowsShellService::ClassifyShortcut(const nsAString& aPath,
   // Start Menu shortcuts. These both map to "StartMenu" for consistency,
   // rather than having a separate "StartMenuPins" which would only apply on
   // Win7.
+  //
+  // The Startup folders live underneath the Start Menu folders, so they must
+  // come first for the more specific "Autostart" classification to win.
   struct {
     KNOWNFOLDERID folderId;
     const char16_t* postfix;
     const char16_t* classification;
-  } folders[] = {{FOLDERID_CommonStartMenu, u"\\", u"StartMenu"},
+  } folders[] = {{FOLDERID_CommonStartup, u"\\", u"Autostart"},
+                 {FOLDERID_Startup, u"\\", u"Autostart"},
+                 {FOLDERID_CommonStartMenu, u"\\", u"StartMenu"},
                  {FOLDERID_StartMenu, u"\\", u"StartMenu"},
                  {FOLDERID_PublicDesktop, u"\\", u"Desktop"},
                  {FOLDERID_Desktop, u"\\", u"Desktop"},

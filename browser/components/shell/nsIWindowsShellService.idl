@@ -90,20 +90,19 @@ interface nsIWindowsShellService : nsIShellService
   Promise deleteShortcut(in AString aShortcutFolder, in AString aShortcutRelativePath);
 
   /*
-   * Searches the %USERPROFILE%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup
-   * folder and returns an array with the path of all shortcuts with a target matching the
-   * current Firefox install location. The AUMID isn't required here as we are only looking
-   * for the currently running binary, whether that's firefox.exe or the private browsing
-   * proxy executable.
+   * Searches both the per-user Startup folder (FOLDERID_Startup) and the
+   * all-users Startup folder (FOLDERID_CommonStartup) and returns an array
+   * with the path of all shortcuts with a target matching the current Firefox
+   * install location. The AUMID isn't required here as we are only looking
+   * for the currently running binary, whether that's firefox.exe or the private
+   * browsing proxy executable.
    *
-   * It is possible to return an empty array if no shortcuts are found.
+   * A Startup folder that cannot be resolved, cannot be enumerated, or holds
+   * no shortcuts is skipped rather than treated as an error, so it is possible
+   * to return an empty array if no shortcuts are found.
    *
-   * @return An array of paths for all launch on login shortcuts.s
+   * @return An array of paths for all launch on login shortcuts.
    *
-   * @throws NS_ERROR_ABORT
-   *         if instance cannot be created.
-   * @throws NS_ERROR_FILE_NOT_FOUND
-   *         if %USERPROFILE%\AppData\Roaming\ cannot be opened.
    * @throws NS_ERROR_FAILURE
    *         if the executable file cannot be found.
    * @throws NS_ERROR_FILE_UNRECOGNIZED_PATH
@@ -408,6 +407,8 @@ interface nsIWindowsShellService : nsIShellService
    *    Menu, including pins
    * - "Desktop" or "DesktopPrivate", Current User or All Users Desktop
    * - "Taskbar" or "TaskbarPrivate", Taskbar Pins
+   * - "Autostart" or "AutostartPrivate", Current User or All Users Startup
+   *    folder
    * - "" otherwise
    *
    * If a Private Browsing shortcut was used to launch, the "Private"

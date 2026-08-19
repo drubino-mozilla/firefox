@@ -40,3 +40,42 @@ add_task(async function test_launched_from_desktop_launcher() {
     Glean.osEnvironment.launchMethod.testGetValue()
   );
 });
+
+// This file is Windows-only via `run-if = ["os == 'win'"]` in xpcshell.toml.
+//
+// classifyShortcut() is the tractable seam for the Startup-folder cases:
+// Services.appinfo.processStartupShortcut is read-only and cannot be faked.
+// It compares the path as a case-insensitive string prefix against the folders
+// SHGetKnownFolderPath resolves and avoids I/O, so these synthesized paths do
+// not need to exist on disk.
+const STARTUP_RELATIVE_PATH =
+  "Microsoft\\Windows\\Start Menu\\Programs\\Startup";
+
+function classifyStartupShortcut(folder) {
+  let shellService = Cc["@mozilla.org/browser/shell-service;1"].getService(
+    Ci.nsIWindowsShellService
+  );
+  return shellService.classifyShortcut(
+    `${folder}\\${STARTUP_RELATIVE_PATH}\\Firefox.lnk`
+  );
+}
+
+// A Start Menu folder path is a prefix of its Startup folder path and
+// ClassifyShortcut returns on first match, so the "Autostart" rows must stay
+// above the "StartMenu" rows in its folders[] table. Getting "StartMenu" here
+// means that ordering regressed.
+add_task(function test_classifyShortcut_perUserStartupFolder() {
+  Assert.equal(
+    classifyStartupShortcut(Services.dirsvc.get("AppData", Ci.nsIFile).path),
+    "Autostart",
+    "A shortcut in the per-user Startup folder classifies as Autostart"
+  );
+});
+
+add_task(function test_classifyShortcut_allUsersStartupFolder() {
+  Assert.equal(
+    classifyStartupShortcut(Services.env.get("ProgramData")),
+    "Autostart",
+    "A shortcut in the all-users Startup folder classifies as Autostart"
+  );
+});
