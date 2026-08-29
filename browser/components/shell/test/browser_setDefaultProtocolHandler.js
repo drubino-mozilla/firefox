@@ -4,8 +4,6 @@
 ChromeUtils.defineESModuleGetters(this, {
   DEFAULT_PROTOCOL_URLS:
     "moz-src:///browser/components/shell/ShellService.sys.mjs",
-  SET_DEFAULT_REDIRECT_PREF:
-    "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
   WindowsSetDefaultRedirect:
     "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
   sinon: "resource://testing-common/Sinon.sys.mjs",
@@ -34,19 +32,63 @@ const shellStub = sinon.stub(ShellService, "shellService").value({
 
 registerCleanupFunction(() => {
   shellStub.restore();
-  Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+  WindowsSetDefaultRedirect.clear();
 });
 
 function resetState() {
   launchSetDefaultAppPickerStub.reset();
   launchModernSettingsDialogDefaultAppsStub.reset();
-  Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+  WindowsSetDefaultRedirect.clear();
 }
 
-function readPrefObject() {
-  return JSON.parse(
-    Services.prefs.getStringPref(SET_DEFAULT_REDIRECT_PREF, "")
+// The redirect lives in an install-scoped registry value rather than a pref,
+// so that any profile of this install can consume what another profile armed.
+function openRedirectKey(mode) {
+  const key = Cc["@mozilla.org/windows-registry-key;1"].createInstance(
+    Ci.nsIWindowsRegKey
   );
+  key.create(
+    Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
+    WindowsSetDefaultRedirect.regPath,
+    mode | Ci.nsIWindowsRegKey.WOW64_64
+  );
+  return key;
+}
+
+function readStoredValue() {
+  const key = openRedirectKey(Ci.nsIWindowsRegKey.ACCESS_READ);
+  try {
+    return key.hasValue("PendingRedirect")
+      ? key.readStringValue("PendingRedirect")
+      : "";
+  } finally {
+    key.close();
+  }
+}
+
+function readStoredObject() {
+  return JSON.parse(readStoredValue());
+}
+
+function keyExists(path) {
+  const key = Cc["@mozilla.org/windows-registry-key;1"].createInstance(
+    Ci.nsIWindowsRegKey
+  );
+  try {
+    key.open(
+      Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
+      path,
+      Ci.nsIWindowsRegKey.ACCESS_READ | Ci.nsIWindowsRegKey.WOW64_64
+    );
+    key.close();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function hasStoredRedirect() {
+  return !!readStoredValue();
 }
 
 add_task(async function test_default_https_uses_url_and_win11_flag() {
@@ -71,7 +113,7 @@ add_task(async function test_default_https_uses_url_and_win11_flag() {
       "Modern settings not invoked when launcher succeeds"
     );
     Assert.deepEqual(
-      readPrefObject(),
+      readStoredObject(),
       {
         openWithArg: DEFAULT_PROTOCOL_URLS.https,
         overrideUri: null,
@@ -99,7 +141,7 @@ add_task(async function test_custom_url_overrides_protocol_default() {
       "Picker called with caller-provided URL, not the protocol default"
     );
     Assert.deepEqual(
-      readPrefObject(),
+      readStoredObject(),
       {
         openWithArg: customUrl,
         overrideUri: DEFAULT_PROTOCOL_URLS.https,
@@ -144,7 +186,7 @@ add_task(async function test_falls_back_to_settings_when_picker_throws() {
       "Fell through to modern settings when launcher threw"
     );
     Assert.ok(
-      !Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
+      !hasStoredRedirect(),
       "Pending redirect cleared on launcher failure so a later round-trip can't pick up stale intent"
     );
   } finally {
@@ -165,7 +207,7 @@ add_task(async function test_unknown_protocol_with_no_url_throws() {
     "Picker not invoked when args don't resolve to a URL"
   );
   Assert.ok(
-    !Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
+    !hasStoredRedirect(),
     "Pref not touched when validation fails before any side effects"
   );
 });
@@ -302,18 +344,61 @@ add_task(async function test_overwrites_existing_pending_redirect() {
   sandbox.stub(ShellService, "_isWindows11").returns(true);
 
   try {
-    // A differently-typed leftover value on the pref must not trip the
-    // setStringPref in WindowsSetDefaultRedirect.arm (it clears first).
-    Services.prefs.setBoolPref(SET_DEFAULT_REDIRECT_PREF, true);
+    // Leftover garbage from an older call must not survive the next arm().
+    const key = openRedirectKey(Ci.nsIWindowsRegKey.ACCESS_WRITE);
+    key.writeStringValue("PendingRedirect", "not json");
+    key.close();
     await ShellService.setAsDefaultProtocolHandler("https", undefined, false);
     Assert.deepEqual(
-      readPrefObject(),
+      readStoredObject(),
       {
         openWithArg: DEFAULT_PROTOCOL_URLS.https,
         overrideUri: null,
         type: WindowsSetDefaultRedirect.TYPE.PROTOCOL,
       },
       "Stale value replaced with the structured redirect on the next call"
+    );
+  } finally {
+    sandbox.restore();
+  }
+});
+
+// An armed redirect that is never consumed (the user opened the picker and
+// cancelled) would otherwise outlive the install, and the key is named after
+// the install hash that a reinstall to the same path reuses.
+add_task(async function test_remove_storage_drops_the_install_key() {
+  resetState();
+  const sandbox = sinon.createSandbox();
+  sandbox.stub(ShellService, "_isWindows11").returns(true);
+
+  try {
+    await ShellService.setAsDefaultProtocolHandler("https");
+    Assert.ok(hasStoredRedirect(), "Armed, so the install's key holds a value");
+
+    WindowsSetDefaultRedirect.removeStorage();
+
+    Assert.ok(
+      !keyExists(WindowsSetDefaultRedirect.regPath),
+      "removeStorage() drops the whole install-scoped key, not just the value"
+    );
+
+    // Safe to call when there is nothing to remove.
+    WindowsSetDefaultRedirect.removeStorage();
+    Assert.ok(
+      !keyExists(WindowsSetDefaultRedirect.regPath),
+      "removeStorage() is idempotent"
+    );
+
+    // And the readers must not recreate it.
+    Assert.equal(
+      WindowsSetDefaultRedirect.consume(DEFAULT_PROTOCOL_URLS.https),
+      null,
+      "Nothing to consume once the storage is gone"
+    );
+    WindowsSetDefaultRedirect.clear();
+    Assert.ok(
+      !keyExists(WindowsSetDefaultRedirect.regPath),
+      "consume() and clear() leave no key behind"
     );
   } finally {
     sandbox.restore();

@@ -11,12 +11,24 @@
 
 import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
+const lazy = {};
+
+ChromeUtils.defineESModuleGetters(lazy, {
+  WindowsSetDefaultRedirect:
+    "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
+});
+
 export async function runBackgroundTask() {
   console.log("Running BackgroundTask_uninstall.");
 
   if (AppConstants.platform === "win") {
     try {
       removeNotifications();
+    } catch (ex) {
+      console.error(ex);
+    }
+    try {
+      removeSetDefaultRedirect();
     } catch (ex) {
       console.error(ex);
     }
@@ -32,6 +44,11 @@ export async function runBackgroundTask() {
   } catch (ex) {
     console.error(ex);
   }
+}
+
+function removeSetDefaultRedirect() {
+  console.log("Removing this install's pending set-default redirect.");
+  lazy.WindowsSetDefaultRedirect.removeStorage();
 }
 
 function removeNotifications() {

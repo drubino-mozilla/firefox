@@ -10,8 +10,12 @@
  * ShellService arms a one-shot redirect before launching the OS "Open with"
  * picker via IOpenWithLauncher; once the user picks Firefox, the OS relaunches
  * Firefox with the same value and the command-line handler consumes it. This
- * module owns that shared state (the pref shape and the matching rules).
+ * module owns that shared state (its storage and the matching rules).
+ *
+ * The state is install-scoped, so we use a reg key named with the install hash
  */
+
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 
 const lazy = {};
 
@@ -19,12 +23,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
   FileUtils: "resource://gre/modules/FileUtils.sys.mjs",
 });
 
-// This pref is an object { openWithArg, overrideUri, type } consumed by
+// Name of the value, under the install-scoped key below, holding the
+// { openWithArg, overrideUri, type } object consumed by
 // WindowsSetDefaultAppCmdHandler when the user picks a default (file type or
 // protocol) using the IOpenWithLauncher API. It is reset anytime the dialog is
 // used again, or when we intercept the OS reopening one of our openWithArgs.
-export const SET_DEFAULT_REDIRECT_PREF =
-  "browser.shell.setDefaultApp.pendingRedirect";
+const REDIRECT_VALUE_NAME = "PendingRedirect";
 
 export class WindowsSetDefaultRedirect {
   // Supported default types to set using IOpenWithLauncher.
@@ -32,6 +36,20 @@ export class WindowsSetDefaultRedirect {
     FILE: 1 << 0,
     PROTOCOL: 1 << 1,
   };
+
+  /**
+   * HKCU key holding this install's pending redirect, e.g.
+   * "Software\Mozilla\Firefox\SetDefaultApp\71AE18FE3142402B".
+   *
+   * @returns {string}
+   */
+  static get regPath() {
+    const vendor = Services.appinfo.vendor || "Mozilla";
+    const installHash = Cc["@mozilla.org/xre/directory-provider;1"]
+      .getService(Ci.nsIXREDirProvider)
+      .getInstallHash();
+    return `Software\\${vendor}\\${AppConstants.MOZ_APP_NAME}\\SetDefaultApp\\${installHash}`;
+  }
 
   /**
    * Stash a one-shot redirect for the IOpenWithLauncher call.
@@ -49,11 +67,8 @@ export class WindowsSetDefaultRedirect {
    *   file path or a URL.
    */
   static arm(openWithArg, overrideUri, type) {
-    // Clear any stale object left by an older call.
-    Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
-
-    Services.prefs.setStringPref(
-      SET_DEFAULT_REDIRECT_PREF,
+    // Overwrites any stale object left by an older call.
+    this.#write(
       JSON.stringify({ openWithArg, overrideUri: overrideUri ?? null, type })
     );
   }
@@ -62,7 +77,41 @@ export class WindowsSetDefaultRedirect {
    * Clear a pending redirect.
    */
   static clear() {
-    Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+    let key;
+    try {
+      key = this.#openKey(Ci.nsIWindowsRegKey.ACCESS_WRITE, false);
+      key.removeValue(REDIRECT_VALUE_NAME);
+    } catch (e) {
+      // Nothing armed, so nothing to clear.
+    } finally {
+      key?.close();
+    }
+  }
+
+  /**
+   * Drop this install's storage entirely. Called on uninstall, just in case
+   * there was a redirect armed but never consumed (the user opened the picker
+   * and cancelled)
+   */
+  static removeStorage() {
+    const path = this.regPath;
+    const separator = path.lastIndexOf("\\");
+    let parent;
+    try {
+      parent = Cc["@mozilla.org/windows-registry-key;1"].createInstance(
+        Ci.nsIWindowsRegKey
+      );
+      parent.open(
+        Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
+        path.substring(0, separator),
+        Ci.nsIWindowsRegKey.ACCESS_WRITE | Ci.nsIWindowsRegKey.WOW64_64
+      );
+      parent.removeChild(path.substring(separator + 1));
+    } catch (e) {
+      // Never armed on this install, so there is nothing to remove.
+    } finally {
+      parent?.close();
+    }
   }
 
   /**
@@ -80,23 +129,69 @@ export class WindowsSetDefaultRedirect {
     if (!state || !this.#matches(state, arg)) {
       return null;
     }
-    Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+    this.clear();
     return { overrideUri: state.overrideUri ?? null };
+  }
+
+  /**
+   * Open this install's key.
+   *
+   * @param {number} mode - nsIWindowsRegKey ACCESS_* flags.
+   * @param {boolean} create - Create the key when absent.
+   * @returns {nsIWindowsRegKey} An open key the caller must close.
+   */
+  static #openKey(mode, create) {
+    const key = Cc["@mozilla.org/windows-registry-key;1"].createInstance(
+      Ci.nsIWindowsRegKey
+    );
+    const flags = mode | Ci.nsIWindowsRegKey.WOW64_64;
+    if (create) {
+      key.create(
+        Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
+        this.regPath,
+        flags
+      );
+    } else {
+      key.open(Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER, this.regPath, flags);
+    }
+    return key;
+  }
+
+  /**
+   * @param {string} json - Serialized state to store.
+   */
+  static #write(json) {
+    let key;
+    try {
+      key = this.#openKey(Ci.nsIWindowsRegKey.ACCESS_WRITE, true);
+      key.writeStringValue(REDIRECT_VALUE_NAME, json);
+    } catch (e) {
+      console.error("Failed to store the pending set-default redirect:", e);
+    } finally {
+      key?.close();
+    }
   }
 
   /**
    * Read and validate the pending redirect stashed by arm().
    *
    * @returns {?{openWithArg: string, overrideUri: ?string, type: number}} The
-   * stored state, or null when the pref is unset, holds the wrong type, or is
-   * malformed JSON.
+   * stored state, or null when nothing is armed, the value holds the wrong
+   * type, or it is malformed JSON.
    */
   static #read() {
     let raw;
+    let key;
     try {
-      raw = Services.prefs.getStringPref(SET_DEFAULT_REDIRECT_PREF, "");
+      key = this.#openKey(Ci.nsIWindowsRegKey.ACCESS_READ, false);
+      if (!key.hasValue(REDIRECT_VALUE_NAME)) {
+        return null;
+      }
+      raw = key.readStringValue(REDIRECT_VALUE_NAME);
     } catch (e) {
       return null;
+    } finally {
+      key?.close();
     }
     if (!raw) {
       return null;
