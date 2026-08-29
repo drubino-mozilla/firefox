@@ -65,11 +65,22 @@ export class WindowsSetDefaultRedirect {
    * @param {number} type
    *   One of WindowsSetDefaultRedirect.TYPE, identifying whether openWithArg is a
    *   file path or a URL.
+   * @param {Array<string>} [additionalFileTypes]
+   *   File types to claim once the round-trip confirms the user picked us, as
+   *   extension/ProgID-root pairs for
+   *   nsIDefaultAgent.setDefaultExtensionHandlersUserChoice. The picker only
+   *   moves the association it was handed, so anything that has to stay in sync
+   *   with it goes here.
    */
-  static arm(openWithArg, overrideUri, type) {
+  static arm(openWithArg, overrideUri, type, additionalFileTypes = []) {
     // Overwrites any stale object left by an older call.
     this.#write(
-      JSON.stringify({ openWithArg, overrideUri: overrideUri ?? null, type })
+      JSON.stringify({
+        openWithArg,
+        overrideUri: overrideUri ?? null,
+        type,
+        additionalFileTypes,
+      })
     );
   }
 
@@ -117,12 +128,12 @@ export class WindowsSetDefaultRedirect {
   /**
    * If `arg` is the openWithArg stashed by the most recent
    * launchSetDefaultAppPicker call, consume the one-shot redirect and return
-   * its `{ overrideUri }`, where overrideUri is a URI spec to open or null to
-   * just suppress the relaunch. Returns null when `arg` is unrelated to a
-   * pending attempt to set a default.
+   * its `{ overrideUri, additionalFileTypes }`, where overrideUri is a URI spec
+   * to open or null to just suppress the relaunch. Returns null when `arg` is
+   * unrelated to a pending attempt to set a default.
    *
    * @param {string} arg - The -url value the OS handed back.
-   * @returns {?{overrideUri: ?string}}
+   * @returns {?{overrideUri: ?string, additionalFileTypes: Array<string>}}
    */
   static consume(arg) {
     const state = this.#read();
@@ -130,7 +141,10 @@ export class WindowsSetDefaultRedirect {
       return null;
     }
     this.clear();
-    return { overrideUri: state.overrideUri ?? null };
+    return {
+      overrideUri: state.overrideUri ?? null,
+      additionalFileTypes: state.additionalFileTypes ?? [],
+    };
   }
 
   /**
@@ -175,9 +189,9 @@ export class WindowsSetDefaultRedirect {
   /**
    * Read and validate the pending redirect stashed by arm().
    *
-   * @returns {?{openWithArg: string, overrideUri: ?string, type: number}} The
-   * stored state, or null when nothing is armed, the value holds the wrong
-   * type, or it is malformed JSON.
+   * @returns {?{openWithArg: string, overrideUri: ?string, type: number,
+   * additionalFileTypes: ?Array<string>}} The stored state, or null when
+   * nothing is armed, the value holds the wrong type, or it is malformed JSON.
    */
   static #read() {
     let raw;

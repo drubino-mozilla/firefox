@@ -22,6 +22,7 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
+  ShellService: "moz-src:///browser/components/shell/ShellService.sys.mjs",
   WindowsSetDefaultRedirect:
     "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
 });
@@ -57,7 +58,7 @@ export class CommandLineHandler {
       return;
     }
 
-    const { overrideUri } = redirect;
+    const { overrideUri, additionalFileTypes } = redirect;
 
     lazy.logConsole.debug(
       `Claimed IOpenWithLauncher openWithArg ${cmdArg}: state=${aCmdLine.state}, overrideUri=${overrideUri}`
@@ -67,6 +68,22 @@ export class CommandLineHandler {
     // doesn't act on it
     aCmdLine.handleFlagWithParam("url", false);
     aCmdLine.preventDefault = true;
+
+    // Reaching here means the user picked Firefox in the picker, which only
+    // moved the association we handed it. Claim the file types that go with it
+    // so the browser defaults don't end up half-set. Failure is non-fatal: the
+    // protocol default the user just granted still stands.
+    if (additionalFileTypes.length) {
+      lazy.ShellService.setExtensionHandlersUserChoice(
+        additionalFileTypes
+      ).catch(e =>
+        lazy.logConsole.error(
+          `Failed to claim file types ${additionalFileTypes.join(", ")}:`,
+          e
+        )
+      );
+    }
+
     if (overrideUri === null) {
       return;
     }

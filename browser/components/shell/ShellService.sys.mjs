@@ -86,6 +86,15 @@ export const DEFAULT_PROTOCOL_URLS = {
   mailto: "mailto:owl@firefox.com",
 };
 
+// File types that have to move together with a protocol default, keyed by
+// scheme, as extension/ProgID-root pairs for nsIDefaultAgent. The OS picker
+// only claims the association it was handed, so being the default browser for
+// http/https would otherwise leave .htm/.html pointing at another browser.
+export const PROTOCOL_FILE_TYPES = {
+  http: [".html", "FirefoxHTML", ".htm", "FirefoxHTML"],
+  https: [".html", "FirefoxHTML", ".htm", "FirefoxHTML"],
+};
+
 /**
  * Internal functionality to save and restore the docShell.allow* properties.
  */
@@ -406,16 +415,30 @@ let ShellServiceInternal = {
   },
 
   async setAsDefaultPDFHandlerUserChoice() {
+    await this.setExtensionHandlersUserChoice([".pdf", "FirefoxPDF"]);
+  },
+
+  /**
+   * Claim file types through the UserChoice registry keys. Unlike the
+   * browser-wide UserChoice write this doesn't verify the browser hashes, so
+   * it can still succeed for file types that UCPD leaves writable when the
+   * http/https keys are locked.
+   *
+   * @param {Array<string>} aFileExtensions - Extension/ProgID-root pairs, as
+   * taken by nsIDefaultAgent.setDefaultExtensionHandlersUserChoice.
+   * @returns {Promise<void>} Rejects with a WDBAError on failure.
+   */
+  async setExtensionHandlersUserChoice(aFileExtensions) {
     if (AppConstants.platform != "win") {
       throw new Error("Windows-only");
     }
 
     const aumi = lazy.XreDirProvider.getInstallHash();
     try {
-      this.defaultAgent.setDefaultExtensionHandlersUserChoice(aumi, [
-        ".pdf",
-        "FirefoxPDF",
-      ]);
+      this.defaultAgent.setDefaultExtensionHandlersUserChoice(
+        aumi,
+        aFileExtensions
+      );
     } catch (err) {
       this._throwForWDBAResult(err.result || Cr.NS_ERROR_FAILURE);
     }
@@ -730,10 +753,13 @@ let ShellServiceInternal = {
     // Arm the round-trip for once the user picks a default: the OS hands `url`
     // back when Firefox becomes the handler. When opening in Firefox we then
     // open the protocol's default URL; otherwise the relaunch is suppressed.
+    // Any file types that have to stay in sync with this protocol are claimed
+    // on the round-trip, once the user's choice is confirmed.
     lazy.WindowsSetDefaultRedirect.arm(
       url,
       openInFirefox ? DEFAULT_PROTOCOL_URLS[protocol] : null,
-      lazy.WindowsSetDefaultRedirect.TYPE.PROTOCOL
+      lazy.WindowsSetDefaultRedirect.TYPE.PROTOCOL,
+      PROTOCOL_FILE_TYPES[protocol] ?? []
     );
 
     // Tracks the last method attempted and whether its API call succeeded.

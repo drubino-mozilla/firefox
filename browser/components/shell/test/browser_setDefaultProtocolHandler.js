@@ -4,6 +4,8 @@
 ChromeUtils.defineESModuleGetters(this, {
   DEFAULT_PROTOCOL_URLS:
     "moz-src:///browser/components/shell/ShellService.sys.mjs",
+  PROTOCOL_FILE_TYPES:
+    "moz-src:///browser/components/shell/ShellService.sys.mjs",
   WindowsSetDefaultRedirect:
     "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
   sinon: "resource://testing-common/Sinon.sys.mjs",
@@ -118,6 +120,7 @@ add_task(async function test_default_https_uses_url_and_win11_flag() {
         openWithArg: DEFAULT_PROTOCOL_URLS.https,
         overrideUri: null,
         type: WindowsSetDefaultRedirect.TYPE.PROTOCOL,
+        additionalFileTypes: PROTOCOL_FILE_TYPES.https,
       },
       "Pref records the URL; overrideUri null so the round-trip is suppressed"
     );
@@ -146,6 +149,7 @@ add_task(async function test_custom_url_overrides_protocol_default() {
         openWithArg: customUrl,
         overrideUri: DEFAULT_PROTOCOL_URLS.https,
         type: WindowsSetDefaultRedirect.TYPE.PROTOCOL,
+        additionalFileTypes: PROTOCOL_FILE_TYPES.https,
       },
       "Pref stashes the custom URL + protocol-default overrideUri for the round-trip"
     );
@@ -355,6 +359,7 @@ add_task(async function test_overwrites_existing_pending_redirect() {
         openWithArg: DEFAULT_PROTOCOL_URLS.https,
         overrideUri: null,
         type: WindowsSetDefaultRedirect.TYPE.PROTOCOL,
+        additionalFileTypes: PROTOCOL_FILE_TYPES.https,
       },
       "Stale value replaced with the structured redirect on the next call"
     );
@@ -399,6 +404,46 @@ add_task(async function test_remove_storage_drops_the_install_key() {
     Assert.ok(
       !keyExists(WindowsSetDefaultRedirect.regPath),
       "consume() and clear() leave no key behind"
+    );
+  } finally {
+    sandbox.restore();
+  }
+});
+
+add_task(
+  async function test_html_file_types_ride_along_with_the_web_protocols() {
+    const sandbox = sinon.createSandbox();
+    sandbox.stub(ShellService, "_isWindows11").returns(true);
+
+    try {
+      for (const protocol of ["http", "https"]) {
+        resetState();
+        await ShellService.setAsDefaultProtocolHandler(protocol);
+
+        Assert.deepEqual(
+          readStoredObject().additionalFileTypes,
+          [".html", "FirefoxHTML", ".htm", "FirefoxHTML"],
+          `Armed the HTML file types alongside the ${protocol} default`
+        );
+      }
+    } finally {
+      sandbox.restore();
+    }
+  }
+);
+
+add_task(async function test_no_file_types_for_unrelated_protocols() {
+  resetState();
+  const sandbox = sinon.createSandbox();
+  sandbox.stub(ShellService, "_isWindows11").returns(true);
+
+  try {
+    await ShellService.setAsDefaultProtocolHandler("mailto");
+
+    Assert.deepEqual(
+      readStoredObject().additionalFileTypes,
+      [],
+      "mailto claims no file types"
     );
   } finally {
     sandbox.restore();

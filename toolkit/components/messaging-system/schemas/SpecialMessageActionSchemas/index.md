@@ -300,8 +300,9 @@ Action for setting the default browser to Firefox on the user's system.
 
 Action for setting Firefox as the default browser via the OS "Open with" picker
 (IOpenWithLauncher), which guarantees an OS-level prompt. Claiming the `https`
-handler this way sets the whole web-browser default (both `http` and `https`)
-with a single picker.
+handler this way sets the whole web-browser default with a single picker: `http`
+comes along with `https`, and the `.htm`/`.html` file types are claimed
+separately once the picker round-trip confirms the user's choice.
 
 Windows only.
 

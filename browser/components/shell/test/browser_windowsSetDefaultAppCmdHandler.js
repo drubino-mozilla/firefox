@@ -52,14 +52,21 @@ function makeCmdLine(args, state = Ci.nsICommandLine.STATE_INITIAL_LAUNCH) {
 function armRedirect(
   openWithArg,
   overrideUri,
-  type = WindowsSetDefaultRedirect.TYPE.FILE
+  type = WindowsSetDefaultRedirect.TYPE.FILE,
+  additionalFileTypes = []
 ) {
-  WindowsSetDefaultRedirect.arm(openWithArg, overrideUri, type);
+  WindowsSetDefaultRedirect.arm(
+    openWithArg,
+    overrideUri,
+    type,
+    additionalFileTypes
+  );
 }
 
 let fakeWin;
 let getTopWindowStub;
 let openWindowStub;
+let setExtensionHandlersStub;
 
 add_setup(function () {
   fakeWin = { openTrustedLinkIn: sinon.stub() };
@@ -68,6 +75,11 @@ add_setup(function () {
   // test harness. We only inspect the calls.
   getTopWindowStub = sinon.stub(BrowserWindowTracker, "getTopWindow");
   openWindowStub = sinon.stub(BrowserWindowTracker, "openWindow");
+  // Stubbed so the tests never write UserChoice keys for the running profile.
+  setExtensionHandlersStub = sinon.stub(
+    ShellService,
+    "setExtensionHandlersUserChoice"
+  );
 });
 
 registerCleanupFunction(() => {
@@ -80,6 +92,8 @@ function resetState() {
   getTopWindowStub.reset();
   getTopWindowStub.returns(fakeWin);
   openWindowStub.reset();
+  setExtensionHandlersStub.reset();
+  setExtensionHandlersStub.resolves();
   WindowsSetDefaultRedirect.clear();
 }
 
@@ -302,5 +316,88 @@ add_task(async function test_intent_is_one_shot() {
   Assert.ok(
     fakeWin.openTrustedLinkIn.notCalled,
     "Second call does not redirect"
+  );
+});
+
+// The picker only sets the association it was handed, so a confirmed https
+// round-trip has to claim .htm/.html itself or the browser default ends up
+// half-set.
+const HTML_FILE_TYPES = [".html", "FirefoxHTML", ".htm", "FirefoxHTML"];
+const httpsUrl = "https://www.example.com/owl";
+
+function armProtocolRedirect(
+  overrideUri,
+  additionalFileTypes = HTML_FILE_TYPES
+) {
+  armRedirect(
+    httpsUrl,
+    overrideUri,
+    WindowsSetDefaultRedirect.TYPE.PROTOCOL,
+    additionalFileTypes
+  );
+}
+
+add_task(async function test_claims_armed_file_types_on_round_trip() {
+  resetState();
+  armProtocolRedirect(null);
+
+  new CommandLineHandler().handle(makeCmdLine(["-osint", "-url", httpsUrl]));
+
+  Assert.ok(
+    setExtensionHandlersStub.calledOnce,
+    "Claimed the armed file types once the user's choice came back"
+  );
+  Assert.deepEqual(
+    setExtensionHandlersStub.firstCall.args,
+    [HTML_FILE_TYPES],
+    "Passed the extension/ProgID pairs straight through"
+  );
+});
+
+add_task(async function test_no_file_type_claim_when_none_armed() {
+  resetState();
+  armProtocolRedirect(null, []);
+
+  new CommandLineHandler().handle(makeCmdLine(["-osint", "-url", httpsUrl]));
+
+  Assert.ok(
+    setExtensionHandlersStub.notCalled,
+    "No UserChoice write when the redirect armed no file types"
+  );
+});
+
+add_task(async function test_no_file_type_claim_without_a_match() {
+  // A -url that isn't the pending openWithArg is a real user-initiated open,
+  // not confirmation that the user picked us, so nothing may be claimed.
+  resetState();
+  armProtocolRedirect(null);
+
+  new CommandLineHandler().handle(
+    makeCmdLine(["-osint", "-url", "https://example.com/some-page"])
+  );
+
+  Assert.ok(
+    setExtensionHandlersStub.notCalled,
+    "No UserChoice write for an unrelated -url"
+  );
+  Assert.ok(hasStoredRedirect(), "Pending redirect still armed");
+});
+
+add_task(async function test_file_type_failure_does_not_block_redirect() {
+  resetState();
+  setExtensionHandlersStub.rejects(new Error("mock UserChoice failure"));
+  armProtocolRedirect(blankURISpec);
+
+  const cmdLine = makeCmdLine(["-osint", "-url", httpsUrl]);
+  new CommandLineHandler().handle(cmdLine);
+
+  Assert.equal(
+    cmdLine.preventDefault,
+    true,
+    "Default open still suppressed when the file-type claim fails"
+  );
+  Assert.ok(
+    fakeWin.openTrustedLinkIn.calledOnce,
+    "Redirect still happens when the file-type claim fails"
   );
 });

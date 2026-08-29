@@ -260,8 +260,10 @@ export const SpecialMessageActions = {
   /**
    * Set browser as the OS default browser via the "Open with" picker
    * (IOpenWithLauncher), guaranteeing an OS-level prompt. Claiming the https
-   * protocol handler this way sets the whole web-browser default (http and
-   * https) with a single picker. Windows only.
+   * protocol handler this way sets the whole web-browser default with a single
+   * picker: http comes along with https, and the .htm/.html file types are
+   * claimed separately once the picker round-trip confirms the user's choice.
+   * Windows only.
    *
    * @param {Window} window Reference to a window object
    */
