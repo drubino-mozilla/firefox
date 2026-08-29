@@ -86,10 +86,10 @@ export const DEFAULT_PROTOCOL_URLS = {
   mailto: "mailto:owl@firefox.com",
 };
 
-// File types that have to move together with a protocol default, keyed by
-// scheme, as extension/ProgID-root pairs for nsIDefaultAgent. The OS picker
-// only claims the association it was handed, so being the default browser for
-// http/https would otherwise leave .htm/.html pointing at another browser.
+// File types that should move together with a protocol default, as 
+// extension/ProgID-root pairs for nsIDefaultAgent. The OS picker only claims
+// the association it was handed, so being the default for http/https leaves
+// .htm/.html pointing at another browser, which is not ideal.
 export const PROTOCOL_FILE_TYPES = {
   http: [".html", "FirefoxHTML", ".htm", "FirefoxHTML"],
   https: [".html", "FirefoxHTML", ".htm", "FirefoxHTML"],
@@ -419,10 +419,8 @@ let ShellServiceInternal = {
   },
 
   /**
-   * Claim file types through the UserChoice registry keys. Unlike the
-   * browser-wide UserChoice write this doesn't verify the browser hashes, so
-   * it can still succeed for file types that UCPD leaves writable when the
-   * http/https keys are locked.
+   * Claim file types through the UserChoice registry keys. This will only
+   * work when UCPD.sys protection isn't enforced. 
    *
    * @param {Array<string>} aFileExtensions - Extension/ProgID-root pairs, as
    * taken by nsIDefaultAgent.setDefaultExtensionHandlersUserChoice.
