@@ -7,8 +7,6 @@ const { CommandLineHandler } = ChromeUtils.importESModule(
 
 ChromeUtils.defineESModuleGetters(this, {
   BrowserWindowTracker: "resource:///modules/BrowserWindowTracker.sys.mjs",
-  SET_DEFAULT_REDIRECT_PREF:
-    "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
   ShellService: "moz-src:///browser/components/shell/ShellService.sys.mjs",
   WindowsSetDefaultRedirect:
     "moz-src:///browser/components/shell/WindowsSetDefaultRedirect.sys.mjs",
@@ -23,6 +21,24 @@ const blankURISpec = Services.io.newFileURI(
 ).spec;
 
 const workingDir = Services.dirsvc.get("GreD", Ci.nsIFile);
+
+// The redirect lives in an install-scoped registry value rather than a pref,
+// so that any profile of this install can consume what another profile armed.
+function hasStoredRedirect() {
+  const key = Cc["@mozilla.org/windows-registry-key;1"].createInstance(
+    Ci.nsIWindowsRegKey
+  );
+  key.create(
+    Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
+    WindowsSetDefaultRedirect.regPath,
+    Ci.nsIWindowsRegKey.ACCESS_READ | Ci.nsIWindowsRegKey.WOW64_64
+  );
+  try {
+    return key.hasValue("PendingRedirect");
+  } finally {
+    key.close();
+  }
+}
 
 // Build a real nsICommandLine from an args array, so we exercise the same
 // flag-parsing the OS-initiated launch goes through
@@ -56,7 +72,7 @@ add_setup(function () {
 
 registerCleanupFunction(() => {
   sinon.restore();
-  Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+  WindowsSetDefaultRedirect.clear();
 });
 
 function resetState() {
@@ -64,7 +80,7 @@ function resetState() {
   getTopWindowStub.reset();
   getTopWindowStub.returns(fakeWin);
   openWindowStub.reset();
-  Services.prefs.clearUserPref(SET_DEFAULT_REDIRECT_PREF);
+  WindowsSetDefaultRedirect.clear();
 }
 
 add_task(async function test_no_osint_returns_early() {
@@ -160,7 +176,7 @@ add_task(async function test_unrelated_url_arg_is_ignored() {
     "No tab opened for an unrelated -url"
   );
   Assert.ok(
-    Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
+    hasStoredRedirect(),
     "Pending redirect untouched when the openWithArg doesn't match"
   );
 });
@@ -187,10 +203,7 @@ add_task(async function test_suppress_only_when_target_null() {
     "No redirect when target is null"
   );
   Assert.ok(openWindowStub.notCalled, "No fallback window when target is null");
-  Assert.ok(
-    !Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
-    "Redirect intent consumed"
-  );
+  Assert.ok(!hasStoredRedirect(), "Redirect intent consumed");
 });
 
 add_task(async function test_redirects_to_top_window() {
@@ -216,7 +229,7 @@ add_task(async function test_redirects_to_top_window() {
   ]);
   Assert.ok(openWindowStub.notCalled, "No new window when one exists");
   Assert.ok(
-    !Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
+    !hasStoredRedirect(),
     "Redirect intent is one-shot and cleared after use"
   );
 });
@@ -255,7 +268,7 @@ add_task(async function test_opens_new_window_when_no_top() {
     "nsISupportsString carries the redirect URI"
   );
   Assert.ok(
-    !Services.prefs.prefHasUserValue(SET_DEFAULT_REDIRECT_PREF),
+    !hasStoredRedirect(),
     "Redirect intent is one-shot and cleared after use"
   );
 });
