@@ -1771,6 +1771,9 @@ pref("browser.bookmarks.editDialog.maxRecentFolders", 7);
   pref("browser.taskbar.lists.tasks.enabled", true);
   pref("browser.taskbar.lists.refreshInSeconds", 120);
   pref("browser.startMenu.msixPinnedWhenLastChecked", false);
+
+  // Docks an address bar to the top edge of the screen as a Windows appbar.
+  pref("browser.dockedbar.enabled", false);
 #endif
 
 // Preferences to be synced by default.

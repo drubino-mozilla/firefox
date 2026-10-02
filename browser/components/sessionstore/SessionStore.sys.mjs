@@ -2025,7 +2025,8 @@ class _SessionStore {
     // these are ephemeral and tied to a specific tab's browser document.
     if (
       aWindow.browsingContext.isDocumentPiP ||
-      aWindow.document.documentElement.hasAttribute("mini-window")
+      aWindow.document.documentElement.hasAttribute("mini-window") ||
+      aWindow.document.documentElement.hasAttribute("dockedbar")
     ) {
       return;
     }

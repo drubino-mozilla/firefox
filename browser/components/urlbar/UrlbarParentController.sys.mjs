@@ -28,6 +28,7 @@ const lazy = XPCOMUtils.declareLazy({
     "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs",
   ContainerCreationPanel:
     "chrome://browser/content/usercontext/ContainerCreationPanel.mjs",
+  DockedBar: "moz-src:///browser/components/dockedbar/DockedBar.sys.mjs",
   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
   Interactions: "moz-src:///browser/components/places/Interactions.sys.mjs",
   ProvidersManager:
@@ -1061,6 +1062,11 @@ export class UrlbarParentController {
       return { reverted: true, browserId: browser.browserId };
     }
     params.postData = postData;
+
+    if (this.browserWindow.document.documentElement.hasAttribute("dockedbar")) {
+      lazy.DockedBar.openFromBar(this.browserWindow, url, where, params);
+      return { reverted: false, browserId: browser.browserId };
+    }
 
     if (this.#isAddressbar) {
       this.#prepareAddressbarLoad({

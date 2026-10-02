@@ -1,0 +1,89 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Loaded only into the docked address bar window. */
+
+:root[dockedbar] {
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  /* A transparent root makes the whole window transparent, so while the
+     window grows to fit the results dropdown, whatever is behind it shows
+     around the dropdown. Only the toolbar itself is painted. */
+  background: transparent !important;
+
+  body {
+    background: none !important;
+  }
+
+  #navigator-toolbox {
+    background-color: var(--toolbox-background-color) !important;
+    background-image: var(--toolbox-background-image) !important;
+    background-repeat: var(--toolbox-background-repeat);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    background-position: var(--toolbox-background-position);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    background-size: var(--toolbox-background-size);
+    color: var(--toolbox-text-color);
+  }
+
+  #toolbar-menubar,
+  #TabsToolbar,
+  #PersonalToolbar,
+  #notifications-toolbar,
+  #nav-bar-customization-target > :not(#urlbar-container),
+  #nav-bar > :not(#nav-bar-customization-target, #dockedbar-logo, #dockedbar-new-tab-button, #dockedbar-close-button),
+  #sidebar-main,
+  #sidebar-box,
+  #sidebar-splitter,
+  .titlebar-buttonbox-container {
+    display: none !important;
+  }
+
+  #nav-bar {
+    padding-inline: var(--space-small) !important;
+  }
+
+  #urlbar-container {
+    max-width: none !important;
+    flex: 1 !important;
+  }
+
+  #browser {
+    visibility: collapse !important;
+  }
+}
+
+#dockedbar-logo {
+  list-style-image: url("chrome://branding/content/about-logo.svg");
+  width: var(--icon-size-large);
+  height: var(--icon-size-large);
+  align-self: center;
+  /* Line the logo up with the close button's icon at the other end, and keep
+     the same gap to the next button as between the other items. */
+  margin-inline: calc(var(--toolbarbutton-padding-outer) + var(--toolbarbutton-padding-inner)) var(--space-xsmall);
+}
+
+#dockedbar-new-tab-button {
+  list-style-image: url("chrome://browser/skin/new-tab.svg");
+
+  /* The icon and the label each get the toolbar button hover background;
+     square off their inner corners so the two read as one button. */
+  > .toolbarbutton-icon {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  > .toolbarbutton-text {
+    display: flex;
+    align-items: center;
+    padding-inline: 0 calc(var(--toolbarbutton-padding-inner) * 1.5);
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+}
+
+#dockedbar-close-button {
+  list-style-image: url("chrome://global/skin/icons/close.svg");
+}
