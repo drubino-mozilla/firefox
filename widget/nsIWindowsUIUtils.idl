@@ -8,7 +8,7 @@
 interface mozIDOMWindowProxy;
 interface imgIContainer;
 
-[scriptable, builtinclass, uuid(aa8a0ecf-96a1-418c-b80e-f24ae18bbedc)]
+[scriptable, builtinclass, uuid(5b3c9a41-7e2d-4f6b-9c58-2d1e8a7f4b90)]
 interface nsIWindowsUIUtils : nsISupports
 {
   readonly attribute long systemSmallIconSize;
@@ -59,4 +59,30 @@ interface nsIWindowsUIUtils : nsISupports
    * Share URL
    */
   void shareUrl(in AString urlToShare, in AString shareTitle);
+
+  /**
+   * Docks aWindow to the top edge of its screen as an appbar, a desktop
+   * toolbar like the taskbar that the shell keeps other windows out of,
+   * reserving a strip aHeight device pixels tall. Calling it again changes the
+   * height of the strip. The window becomes a borderless tool window, hides
+   * while a full screen app is in front, and outside the reserved strip and the
+   * regions set with setAppBarHitRegions is see-through and lets clicks through.
+   */
+  void dockAsAppBar(in mozIDOMWindowProxy aWindow, in long aHeight);
+
+  /**
+   * Sets the height of an appbar window in device pixels. It may extend below
+   * the reserved strip.
+   */
+  void setAppBarWindowHeight(in mozIDOMWindowProxy aWindow, in long aHeight);
+
+  /**
+   * Sets the parts of an appbar window below its reserved strip that take
+   * clicks, as consecutive (x, y, width, height, corner radius) values in
+   * device pixels relative to the window.
+   */
+  void setAppBarHitRegions(in mozIDOMWindowProxy aWindow,
+                           in Array<long> aRegions);
+
+  void undockAppBar(in mozIDOMWindowProxy aWindow);
 };

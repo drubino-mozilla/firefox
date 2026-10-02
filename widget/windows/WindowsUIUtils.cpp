@@ -13,6 +13,7 @@
 // clang-format on
 
 #include "Units.h"
+#include "WinAppBar.h"
 #include "WinRegistry.h"
 #include "WinUtils.h"
 #include "mozilla/ClearOnShutdown.h"
@@ -974,6 +975,58 @@ WindowsUIUtils::ShareUrl(const nsAString& aUrlToShare,
   text.SetIsVoid(true);
   WindowsUIUtils::Share(nsAutoString(aShareTitle), text,
                         nsAutoString(aUrlToShare));
+  return NS_OK;
+}
+
+static nsWindow* GetNativeWindow(mozIDOMWindowProxy* aWindow) {
+  nsCOMPtr<nsIWidget> widget =
+      nsGlobalWindowOuter::Cast(aWindow)->GetMainWidget();
+  return static_cast<nsWindow*>(widget.get());
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::DockAsAppBar(mozIDOMWindowProxy* aWindow, int32_t aHeight) {
+  NS_ENSURE_ARG(aWindow);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window, NS_ERROR_FAILURE);
+  window->DockAsAppBar(aHeight);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::SetAppBarWindowHeight(mozIDOMWindowProxy* aWindow,
+                                      int32_t aHeight) {
+  NS_ENSURE_ARG(aWindow);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window && window->GetAppBar(), NS_ERROR_NOT_AVAILABLE);
+  window->GetAppBar()->SetWindowHeight(aHeight);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::SetAppBarHitRegions(mozIDOMWindowProxy* aWindow,
+                                    const nsTArray<int32_t>& aRegions) {
+  NS_ENSURE_ARG(aWindow);
+  NS_ENSURE_ARG(aRegions.Length() % 5 == 0);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window && window->GetAppBar(), NS_ERROR_NOT_AVAILABLE);
+  nsTArray<mozilla::widget::WinAppBar::HitRegion> regions;
+  for (size_t i = 0; i < aRegions.Length(); i += 5) {
+    regions.AppendElement(mozilla::widget::WinAppBar::HitRegion{
+        LayoutDeviceIntRect(aRegions[i], aRegions[i + 1], aRegions[i + 2],
+                            aRegions[i + 3]),
+        aRegions[i + 4]});
+  }
+  window->GetAppBar()->SetHitRegions(std::move(regions));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::UndockAppBar(mozIDOMWindowProxy* aWindow) {
+  NS_ENSURE_ARG(aWindow);
+  if (nsWindow* window = GetNativeWindow(aWindow)) {
+    window->UndockAppBar();
+  }
   return NS_OK;
 }
 

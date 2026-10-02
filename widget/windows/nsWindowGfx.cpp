@@ -23,6 +23,7 @@
 
 #include "ImageRegion.h"
 #include "InProcessWinCompositorWidget.h"
+#include "WinAppBar.h"
 #include "WinUtils.h"
 #include "WinWindowOcclusionTracker.h"
 #include "WindowRenderer.h"
@@ -263,6 +264,9 @@ bool nsWindow::OnPaint() {
 
   if (!fallback) {
     ComputeAndClearTranslucentRegion();
+    if (mAppBar) {
+      mAppBar->Paint(hDC);
+    }
   }
 
   if (knowsCompositor && layerManager && !region.IsEmpty()) {

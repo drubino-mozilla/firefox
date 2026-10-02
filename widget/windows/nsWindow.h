@@ -69,6 +69,7 @@ class NativeKey;
 class InProcessWinCompositorWidget;
 struct MSGResult;
 class DirectManipulationOwner;
+class WinAppBar;
 }  // namespace widget
 }  // namespace mozilla
 
@@ -333,6 +334,12 @@ class nsWindow final : public nsIWidget {
   void SetBigIconNoData();
 
   void UpdateMicaBackdrop(bool aForce = false);
+
+  // Docks the window to the top edge of its monitor as an appbar reserving
+  // aHeight device pixels. See WinAppBar.
+  void DockAsAppBar(int32_t aHeight);
+  void UndockAppBar();
+  mozilla::widget::WinAppBar* GetAppBar() { return mAppBar.get(); }
 
   static void SetIsRestoringSession(const bool aIsRestoringSession) {
     sIsRestoringSession = aIsRestoringSession;
@@ -896,6 +903,8 @@ class nsWindow final : public nsIWidget {
 
   // Whether we are asked to render a mica backdrop.
   bool mMicaBackdrop : 1;
+
+  mozilla::UniquePtr<mozilla::widget::WinAppBar> mAppBar;
 
   int32_t mCachedHitTestResult = 0;
 

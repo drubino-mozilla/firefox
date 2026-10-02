@@ -142,6 +142,7 @@ SOURCES += [
     "nsSharePicker.cpp",
     "nsWidgetFactory.cpp",
     "OSKInputPaneManager.cpp",
+    "WinAppBar.cpp",
     "WinCompositorWidget.cpp",
     "WindowsSMTCProvider.cpp",
     "WindowsUIUtils.cpp",
