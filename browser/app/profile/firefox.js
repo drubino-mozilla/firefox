@@ -1773,7 +1773,7 @@ pref("browser.bookmarks.editDialog.maxRecentFolders", 7);
   pref("browser.startMenu.msixPinnedWhenLastChecked", false);
 
   // Docks an address bar to the top edge of the screen as a Windows appbar.
-  pref("browser.dockedbar.enabled", false);
+  pref("browser.dockedbar.enabled", true);
 #endif
 
 // Preferences to be synced by default.
