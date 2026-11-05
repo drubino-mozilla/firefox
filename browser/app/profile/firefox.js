@@ -1799,7 +1799,7 @@ pref("browser.bookmarks.editDialog.maxRecentFolders", 7);
 
   // Firefox Horizon: docks an address bar to the top edge of the screen as a
   // Windows appbar.
-  pref("browser.dockedbar.enabled", false);
+  pref("browser.dockedbar.enabled", true);
   // Open what's launched from Firefox Horizon in the default browser, when that
   // is a different Firefox install.
   pref("browser.dockedbar.foxfood", false);
