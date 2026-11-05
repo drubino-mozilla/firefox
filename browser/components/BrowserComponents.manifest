@@ -188,6 +188,9 @@ category browser-first-window-ready moz-src:///toolkit/components/captchadetecti
 category browser-first-window-ready moz-src:///browser/components/ipprotection/IPProtectionHelpers.sys.mjs IPProtectionActivator.init
 category browser-first-window-ready moz-src:///browser/components/customizableui/SearchWidgetTracker.sys.mjs SearchWidgetTracker.init
 category browser-first-window-ready moz-src:///toolkit/components/widgets/WidgetManager.sys.mjs WidgetManager.init
+#ifdef XP_WIN
+category browser-first-window-ready moz-src:///browser/components/dockedbar/DockedBar.sys.mjs DockedBar.init
+#endif
 #ifdef MOZ_SANDBOX
 #ifdef XP_LINUX
 category browser-first-window-ready resource://gre/modules/SandboxUtils.sys.mjs SandboxUtils.maybeWarnAboutMissingUserNamespaces

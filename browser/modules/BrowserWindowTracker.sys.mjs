@@ -211,6 +211,7 @@ export const BrowserWindowTracker = {
       if (
         !win.closed &&
         !win.document.documentElement.hasAttribute("mini-window") &&
+        !win.document.documentElement.hasAttribute("dockedbar") &&
         (options.allowPopups || win.toolbar.visible) &&
         (options.allowTaskbarTabs ||
           !win.document.documentElement.hasAttribute("taskbartab")) &&

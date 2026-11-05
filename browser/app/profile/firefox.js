@@ -1796,6 +1796,13 @@ pref("browser.bookmarks.editDialog.maxRecentFolders", 7);
   pref("browser.taskbar.lists.tasks.enabled", true);
   pref("browser.taskbar.lists.refreshInSeconds", 120);
   pref("browser.startMenu.msixPinnedWhenLastChecked", false);
+
+  // Firefox Horizon: docks an address bar to the top edge of the screen as a
+  // Windows appbar.
+  pref("browser.dockedbar.enabled", false);
+  // Open what's launched from Firefox Horizon in the default browser, when that
+  // is a different Firefox install.
+  pref("browser.dockedbar.foxfood", false);
 #endif
 
 // Preferences to be synced by default.

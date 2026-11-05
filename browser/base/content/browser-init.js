@@ -178,6 +178,14 @@ var gBrowserInit = {
       if (extraOptions.hasKey("chromeless-window")) {
         document.documentElement.setAttribute("chromeless-window", true);
       }
+      if (extraOptions.hasKey("dockedbar")) {
+        document.documentElement.setAttribute("dockedbar", true);
+        document.documentElement.removeAttribute("windowsmica");
+        CustomTitlebar.allowedBy("dockedbar", false);
+        // Keep the bar's size and position out of the persisted window state
+        // that new browser windows start from.
+        document.documentElement.removeAttribute("persist");
+      }
       if (extraOptions.hasKey("web-extension-popup-window")) {
         document.documentElement.setAttribute(
           "web-extension-popup-window",

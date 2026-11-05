@@ -1,0 +1,68 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Loaded only into the Firefox Horizon window. */
+
+:root[dockedbar] {
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  /* A transparent root makes the whole window transparent, so while the
+     window grows to fit the results dropdown, whatever is behind it shows
+     around the dropdown. Only the toolbar itself is painted. */
+  background: transparent !important;
+
+  body {
+    background: none !important;
+  }
+
+  #navigator-toolbox {
+    background-color: var(--toolbox-background-color) !important;
+    background-image: var(--toolbox-background-image) !important;
+    background-repeat: var(--toolbox-background-repeat);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    background-position: var(--toolbox-background-position);
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
+    background-size: var(--toolbox-background-size);
+    color: var(--toolbox-text-color);
+  }
+
+  #toolbar-menubar,
+  #TabsToolbar,
+  #PersonalToolbar,
+  #notifications-toolbar,
+  #nav-bar-customization-target > :not(#urlbar-container),
+  #nav-bar > :not(#nav-bar-customization-target, #dockedbar-menu-button, #dockedbar-new-tab-button),
+  #sidebar-main,
+  #sidebar-box,
+  #sidebar-splitter,
+  .titlebar-buttonbox-container {
+    display: none !important;
+  }
+
+  #nav-bar {
+    padding-inline: var(--space-small) !important;
+  }
+
+  #urlbar-container {
+    max-width: none !important;
+    flex: 1 !important;
+  }
+
+  #browser {
+    visibility: collapse !important;
+  }
+}
+
+/* The Firefox logo is a larger icon in the same button box as the other
+   toolbar buttons, so it gets their hover and pressed states. */
+#dockedbar-menu-button {
+  --toolbarbutton-padding-inner: var(--space-xxsmall);
+  --toolbarbutton-icon-size: calc(var(--icon-size-large) + 2 * var(--toolbarbutton-padding-inner));
+  list-style-image: url("chrome://branding/content/about-logo.svg");
+}
+
+#dockedbar-new-tab-button {
+  list-style-image: url("chrome://global/skin/icons/plus.svg");
+}

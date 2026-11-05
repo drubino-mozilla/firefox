@@ -117,6 +117,10 @@ toolbar .toolbarbutton-1 {
   list-style-image: url("chrome://browser/skin/window.svg");
 }
 
+#dockedbar-button {
+  list-style-image: url("chrome://browser/skin/dockedbar.svg");
+}
+
 #new-tab-button {
   list-style-image: url("chrome://browser/skin/new-tab.svg");
 }

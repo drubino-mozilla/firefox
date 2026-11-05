@@ -2064,8 +2064,12 @@ class _SessionStore {
    */
   #onBeforeBrowserWindowShown(aWindow) {
     // Do not track Document Picture-in-Picture windows since these are
-    // ephemeral and tied to a specific tab's browser document.
-    if (aWindow.browsingContext.isDocumentPiP) {
+    // ephemeral and tied to a specific tab's browser document, or the Firefox
+    // Horizon window.
+    if (
+      aWindow.browsingContext.isDocumentPiP ||
+      aWindow.document.documentElement.hasAttribute("dockedbar")
+    ) {
       return;
     }
 
