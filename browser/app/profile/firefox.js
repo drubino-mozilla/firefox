@@ -287,7 +287,7 @@ pref("browser.compactmode.auto.threshold", "0.05");
 pref("browser.compactmode.show", false);
 
 // At startup, check if we're the default browser and prompt user if not.
-pref("browser.shell.checkDefaultBrowser", true);
+pref("browser.shell.checkDefaultBrowser", false);
 pref("browser.shell.shortcutFavicons",true);
 pref("browser.shell.mostRecentDateSetAsDefault", "");
 pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);
@@ -323,7 +323,7 @@ pref("browser.shell.focusSetDefaultBrowserButton", false);
 // - "animated": Display an animated image.
 pref("browser.shell.displayKitImageBehindSetDefaultBrowserButton", "off");
 
-pref("browser.shell.customIcon.enabled", true);
+pref("browser.shell.customIcon.enabled", false);
 
 // After a failed UserChoice attempt, show the OS "Open with" picker via the
 // undocumented IOpenWithLauncher API so the user can pick Firefox themselves.
@@ -1799,7 +1799,7 @@ pref("browser.bookmarks.editDialog.maxRecentFolders", 7);
 
   // Firefox Horizon: docks an address bar to the top edge of the screen as a
   // Windows appbar.
-  pref("browser.dockedbar.enabled", false);
+  pref("browser.dockedbar.enabled", true);
   // Open what's launched from Firefox Horizon in the default browser, when that
   // is a different Firefox install.
   pref("browser.dockedbar.foxfood", false);
@@ -2277,7 +2277,7 @@ pref("browser.newtabpage.trainhopAddon.xpiBaseURL", "https://archive.mozilla.org
 pref("browser.newtabpage.sponsor-protection.enabled", true);
 
 // Separate about welcome
-pref("browser.aboutwelcome.enabled", true);
+pref("browser.aboutwelcome.enabled", false);
 // Used to set multistage welcome UX
 pref("browser.aboutwelcome.screens", "");
 // Whether to gate loading about:welcome on Nimbus experiments having loaded.
@@ -3947,3 +3947,6 @@ pref("distribution.mozillaonline.ignore", true);
 #ifdef XP_MACOSX
   pref("browser.macAppMenu.setAsDefaultShown", false);
 #endif
+
+// Horizon demo build: never create the Private Browsing shortcut.
+pref("browser.privacySegmentation.createdShortcut", true);
