@@ -77,6 +77,7 @@
 #include "ScreenHelperWin.h"
 #include "SystemTimeConverter.h"
 #include "WidgetUtils.h"
+#include "WinAppBar.h"
 #include "WinMouseScrollHandler.h"
 #include "WinTaskbar.h"
 #include "WinWindowOcclusionTracker.h"
@@ -1315,6 +1316,7 @@ void nsWindow::Destroy() {
   // automatically destroys the associated child or owned windows when it
   // destroys the parent or owner window. The function first destroys child or
   // owned windows, and then it destroys the parent or owner window.
+  mAppBar = nullptr;
   VERIFY(::DestroyWindow(mWnd));
 
   // Our windows can be subclassed which may prevent us receiving WM_DESTROY. If
@@ -2706,6 +2708,15 @@ void nsWindow::SetMicaBackdrop(bool aEnabled) {
   mMicaBackdrop = aEnabled;
   UpdateMicaBackdrop();
 }
+
+void nsWindow::DockAsAppBar(int32_t aHeight) {
+  if (!mAppBar) {
+    mAppBar = std::make_unique<WinAppBar>(mWnd);
+  }
+  mAppBar->SetReservedHeight(aHeight);
+}
+
+void nsWindow::UndockAppBar() { mAppBar = nullptr; }
 
 void nsWindow::UpdateMicaBackdrop(bool aForce) {
   const bool micaEnabled =
@@ -6080,6 +6091,9 @@ bool nsWindow::ProcessMessageInternal(UINT msg, WPARAM& wParam, LPARAM& lParam,
     default: {
       if (msg == nsAppShell::GetTaskbarButtonCreatedMessage()) {
         SetHasTaskbarIconBeenCreated();
+      } else if (mAppBar && msg == mAppBar->CallbackMessage()) {
+        mAppBar->OnNotification(wParam, lParam);
+        result = true;
       }
     } break;
   }
@@ -6699,6 +6713,10 @@ void nsWindow::OnWindowPosChanging(WINDOWPOS* info) {
       mWindowType == WindowType::Popup && mWidgetListener &&
       mWidgetListener->ShouldNotBeVisible()) {
     info->flags &= ~SWP_SHOWWINDOW;
+  }
+
+  if (mAppBar) {
+    mAppBar->OnWindowPosChanging(info);
   }
 }
 

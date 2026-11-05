@@ -13,6 +13,7 @@
 // clang-format on
 
 #include "Units.h"
+#include "WinAppBar.h"
 #include "WinRegistry.h"
 #include "WinUtils.h"
 #include "mozilla/ClearOnShutdown.h"
@@ -974,6 +975,106 @@ WindowsUIUtils::ShareUrl(const nsAString& aUrlToShare,
   text.SetIsVoid(true);
   WindowsUIUtils::Share(nsAutoString(aShareTitle), text,
                         nsAutoString(aUrlToShare));
+  return NS_OK;
+}
+
+static nsWindow* GetNativeWindow(mozIDOMWindowProxy* aWindow) {
+  nsCOMPtr<nsIWidget> widget =
+      nsGlobalWindowOuter::Cast(aWindow)->GetMainWidget();
+  return static_cast<nsWindow*>(widget.get());
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::DockAsAppBar(mozIDOMWindowProxy* aWindow, int32_t aHeight) {
+  NS_ENSURE_ARG(aWindow);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window, NS_ERROR_FAILURE);
+  window->DockAsAppBar(aHeight);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::SetAppBarWindowHeight(mozIDOMWindowProxy* aWindow,
+                                      int32_t aHeight) {
+  NS_ENSURE_ARG(aWindow);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window && window->GetAppBar(), NS_ERROR_NOT_AVAILABLE);
+  window->GetAppBar()->SetWindowHeight(aHeight);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::SetAppBarHitRegions(mozIDOMWindowProxy* aWindow,
+                                    const nsTArray<int32_t>& aRegions) {
+  NS_ENSURE_ARG(aWindow);
+  NS_ENSURE_ARG(aRegions.Length() % 5 == 0);
+  nsWindow* window = GetNativeWindow(aWindow);
+  NS_ENSURE_TRUE(window && window->GetAppBar(), NS_ERROR_NOT_AVAILABLE);
+  nsTArray<mozilla::widget::WinAppBar::HitRegion> regions;
+  for (size_t i = 0; i < aRegions.Length(); i += 5) {
+    regions.AppendElement(mozilla::widget::WinAppBar::HitRegion{
+        LayoutDeviceIntRect(aRegions[i], aRegions[i + 1], aRegions[i + 2],
+                            aRegions[i + 3]),
+        aRegions[i + 4]});
+  }
+  window->GetAppBar()->SetHitRegions(std::move(regions));
+  return NS_OK;
+}
+
+namespace {
+struct WindowOfExecutableSearch {
+  const wchar_t* mExePath;
+  HWND mFound = nullptr;
+};
+
+BOOL CALLBACK FindWindowOfExecutable(HWND aWnd, LPARAM aParam) {
+  auto* search = reinterpret_cast<WindowOfExecutableSearch*>(aParam);
+  wchar_t className[64];
+  if (!::IsWindowVisible(aWnd) ||
+      !::GetClassNameW(aWnd, className, std::size(className)) ||
+      wcscmp(className, L"MozillaWindowClass") != 0) {
+    return TRUE;
+  }
+  DWORD pid = 0;
+  ::GetWindowThreadProcessId(aWnd, &pid);
+  nsAutoHandle process(
+      ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
+  if (!process) {
+    return TRUE;
+  }
+  wchar_t image[MAX_PATH];
+  DWORD size = std::size(image);
+  if (!::QueryFullProcessImageNameW(process, 0, image, &size) ||
+      _wcsicmp(image, search->mExePath) != 0) {
+    return TRUE;
+  }
+  // EnumWindows goes from the top of the z-order down.
+  search->mFound = aWnd;
+  return FALSE;
+}
+}  // namespace
+
+NS_IMETHODIMP
+WindowsUIUtils::RaiseTopWindowOfExecutable(const nsAString& aExePath) {
+  nsString exePath(aExePath);
+  WindowOfExecutableSearch search{exePath.get()};
+  ::EnumWindows(FindWindowOfExecutable, reinterpret_cast<LPARAM>(&search));
+  if (!search.mFound) {
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+  if (::IsIconic(search.mFound)) {
+    ::ShowWindow(search.mFound, SW_RESTORE);
+  }
+  ::SetForegroundWindow(search.mFound);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+WindowsUIUtils::UndockAppBar(mozIDOMWindowProxy* aWindow) {
+  NS_ENSURE_ARG(aWindow);
+  if (nsWindow* window = GetNativeWindow(aWindow)) {
+    window->UndockAppBar();
+  }
   return NS_OK;
 }
 
